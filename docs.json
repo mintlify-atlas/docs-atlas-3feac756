@@ -69,6 +69,7 @@
             "group": "Flask Endpoints",
             "pages": [
               "api/endpoints",
+              "api/home",
               "api/train",
               "api/predict"
             ]

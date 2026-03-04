@@ -20,11 +20,17 @@ The default port is 5001, but can be configured using the `PORT` environment var
 The API exposes the following endpoints:
 
 <CardGroup cols={2}>
+  <Card title="GET /" icon="house" href="/api/home">
+    Access the web interface for fraud prediction
+  </Card>
   <Card title="POST /train" icon="brain" href="/api/train">
     Train a new fraud detection model using data from a specified folder
   </Card>
   <Card title="POST /predict" icon="wand-magic-sparkles" href="/api/predict">
     Make predictions on new data using the trained model
+  </Card>
+  <Card title="GET /dashboard" icon="chart-line" href="/deployment/monitoring">
+    Access the Flask monitoring dashboard for performance metrics
   </Card>
 </CardGroup>
 

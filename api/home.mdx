@@ -1,0 +1,121 @@
+---
+title: 'GET / - Home Page'
+description: 'Web interface for insurance fraud prediction'
+---
+
+## Overview
+
+The home route serves the web interface for the fraud detection system. It provides a user-friendly form for uploading and predicting fraud on insurance claims data.
+
+## Endpoint
+
+```
+GET /
+```
+
+## Response
+
+Returns an HTML page with a web form for fraud prediction.
+
+## Web Interface Features
+
+The web interface (`templates/index.html`) provides:
+
+### Prediction Form
+
+- **Custom File Path Input**: Enter a file path to predict on custom data
+- **Default File Prediction**: Use pre-configured batch files from `Prediction_Batch_files/`
+
+### Form Fields
+
+<ParamField path="csvfile" type="text" required>
+  File path to the CSV file containing insurance claims data for prediction
+</ParamField>
+
+### Buttons
+
+- **Custom File Predict**: Submit prediction with custom file path
+- **Default File Predict**: Use default batch files for prediction
+
+## Usage
+
+### Access the Web Interface
+
+Open your browser and navigate to:
+
+```
+http://127.0.0.1:5001/
+```
+
+### Using Custom File Path
+
+1. Enter the file path in the text field (e.g., `Prediction_Batch_files/`)
+2. Click "Custom File Predict"
+3. Wait for prediction results to appear
+
+### Using Default File
+
+1. Click "Default File Predict"
+2. System will use `Prediction_Batch_files/` as the default path
+3. Results will display in the Results panel
+
+## JavaScript Implementation
+
+The web interface uses jQuery AJAX to call the `/predict` endpoint:
+
+```javascript
+$("#customfile").click(function(e){
+    e.preventDefault();
+    $('#loading').show();
+    var path = $("#csvfile").val();
+    $.ajax({
+        url : "/predict",
+        type: "POST",
+        data: {filepath:path},
+        success: function(response){
+            $(".json-result").html('<p>Prediction File created at !!!Prediction_Output_File/Predictions.csv</p><pre>' + response + '</pre>');
+            $('#loading').hide();
+        }
+    });
+});
+```
+
+## Response Display
+
+Results are displayed in the Results panel showing:
+
+- Confirmation message
+- File path where predictions are saved
+- Prediction file location: `Prediction_Output_File/Predictions.csv`
+
+## Health Check
+
+The home route can also serve as a basic health check to verify the Flask application is running:
+
+```bash
+curl http://127.0.0.1:5001/
+```
+
+If the server is running, it will return the HTML page (status 200).
+
+## Source Code
+
+The route is defined in `main.py:20-23`:
+
+```python
+@app.route("/", methods=['GET'])
+@cross_origin()
+def home():
+    return render_template('index.html')
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="POST /predict" icon="wand-magic-sparkles" href="/api/predict">
+    Learn about the prediction API endpoint
+  </Card>
+  <Card title="Batch Prediction" icon="layer-group" href="/prediction/batch-prediction">
+    Process multiple claims in batch mode
+  </Card>
+</CardGroup>
