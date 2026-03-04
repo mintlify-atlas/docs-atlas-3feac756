@@ -1,0 +1,310 @@
+---
+title: Prediction Output
+description: Understanding and interpreting fraud detection prediction results
+---
+
+## Output Format
+
+The fraud detection system generates predictions in a simple CSV format with a single column containing fraud indicators for each input record.
+
+### File Location
+
+Predictions are saved to:
+
+```
+Prediction_Output_File/Predictions.csv
+```
+
+<Warning>
+The system automatically deletes any existing `Predictions.csv` file before generating new predictions to prevent confusion from previous runs.
+</Warning>
+
+### CSV Structure
+
+The output file contains a single column:
+
+| Column Name | Data Type | Description |
+|-------------|-----------|-------------|
+| Predictions | String | Fraud indicator: 'Y' or 'N' |
+
+**Example output**:
+
+```csv
+Predictions
+N
+N
+Y
+N
+Y
+N
+N
+N
+```
+
+## Y/N Encoding
+
+The system uses a simple binary encoding scheme:
+
+<CardGroup cols={2}>
+  <Card title="Y = Fraud" icon="triangle-exclamation" color="#dc2626">
+    Indicates that the model detected fraudulent activity in the insurance claim.
+    
+    **Model Output**: 1
+    
+    **Risk Level**: High
+  </Card>
+  
+  <Card title="N = Not Fraud" icon="circle-check" color="#16a34a">
+    Indicates that the model did not detect fraudulent activity in the claim.
+    
+    
+    **Model Output**: 0
+    
+    **Risk Level**: Low
+  </Card>
+</CardGroup>
+
+### Encoding Logic
+
+The encoding is performed in the prediction loop from `predictFromModel.py:62-67`:
+
+```python
+result = model.predict(cluster_data)
+for res in result:
+    if res == 0:
+        predictions.append('N')
+    else:
+        predictions.append('Y')
+```
+
+<Info>
+The model's raw output is a binary classification (0 or 1), which is converted to human-readable 'N' or 'Y' values for easier interpretation.
+</Info>
+
+## Result Interpretation
+
+### Understanding Predictions
+
+Each row in the output file corresponds to a row in the input data file in the same order:
+
+<Steps>
+  <Step title="Match by Row Number">
+    The first prediction corresponds to the first input record, the second to the second record, and so on.
+  </Step>
+  
+  <Step title="Review 'Y' Predictions">
+    Claims marked with 'Y' should be flagged for manual review by fraud investigators.
+  </Step>
+  
+  <Step title="Process 'N' Predictions">
+    Claims marked with 'N' can proceed through normal processing workflows.
+  </Step>
+</Steps>
+
+### Output Generation Process
+
+The final output is created using pandas from `predictFromModel.py:69-71`:
+
+```python
+final = pd.DataFrame(list(zip(predictions)), columns=['Predictions'])
+path = "Prediction_Output_File/Predictions.csv"
+final.to_csv("Prediction_Output_File/Predictions.csv", header=True, mode='a+')
+```
+
+<Accordion title="Technical Details">
+  - Predictions are collected in a list during cluster-based processing
+  - The list is converted to a pandas DataFrame with a 'Predictions' column
+  - The DataFrame is written to CSV with headers included
+  - File mode is 'a+' (append), but the file is deleted at the start of each run
+</Accordion>
+
+## Example Output
+
+Consider a batch of 10 insurance claims:
+
+<CodeGroup>
+```csv Input (simplified)
+months_as_customer,policy_annual_premium,incident_severity,...
+328,1406,Major Damage,...
+228,1197,Minor Damage,...
+134,1413,Total Loss,...
+256,1415,Minor Damage,...
+422,1583,Major Damage,...
+```
+
+```csv Output
+Predictions
+N
+N
+Y
+N
+Y
+N
+N
+N
+Y
+N
+```
+</CodeGroup>
+
+**Interpretation**:
+- Claims 1, 2, 4, 6, 7, 8, 10: No fraud detected (N)
+- Claims 3, 5, 9: Potential fraud detected (Y) - require investigation
+
+## Working with Results
+
+### Combining with Input Data
+
+To create a comprehensive report, combine the predictions with the original input data:
+
+```python
+import pandas as pd
+
+# Load input data
+input_data = pd.read_csv('Prediction_FileFromDB/InputFile.csv')
+
+# Load predictions
+predictions = pd.read_csv('Prediction_Output_File/Predictions.csv')
+
+# Combine
+results = pd.concat([input_data, predictions], axis=1)
+
+# Filter fraud cases
+fraud_cases = results[results['Predictions'] == 'Y']
+
+# Save combined results
+results.to_csv('Complete_Predictions_Report.csv', index=False)
+```
+
+### Filtering High-Risk Claims
+
+Identify claims that require investigation:
+
+```python
+import pandas as pd
+
+# Load combined results
+results = pd.read_csv('Complete_Predictions_Report.csv')
+
+# Get fraud predictions
+fraud_claims = results[results['Predictions'] == 'Y']
+
+print(f"Total claims processed: {len(results)}")
+print(f"Fraudulent claims detected: {len(fraud_claims)}")
+print(f"Fraud rate: {len(fraud_claims)/len(results)*100:.2f}%")
+
+# Save for investigation
+fraud_claims.to_csv('Fraud_Investigation_Queue.csv', index=False)
+```
+
+## Prediction Statistics
+
+### Tracking Fraud Rates
+
+Monitor fraud detection trends over time:
+
+<CodeGroup>
+```python Calculate Metrics
+import pandas as pd
+from collections import Counter
+
+predictions = pd.read_csv('Prediction_Output_File/Predictions.csv')
+counts = Counter(predictions['Predictions'])
+
+total = len(predictions)
+fraud_count = counts['Y']
+legit_count = counts['N']
+
+print(f"Total Predictions: {total}")
+print(f"Fraud Detected (Y): {fraud_count} ({fraud_count/total*100:.1f}%)")
+print(f"No Fraud (N): {legit_count} ({legit_count/total*100:.1f}%)")
+```
+
+```python Output Example
+Total Predictions: 1000
+Fraud Detected (Y): 87 (8.7%)
+No Fraud (N): 913 (91.3%)
+```
+</CodeGroup>
+
+## Logging and Audit Trail
+
+All prediction operations are logged to:
+
+```
+Prediction_Logs/Prediction_Log.txt
+```
+
+Log entries include:
+- Start and end timestamps
+- Number of records processed
+- Any errors or exceptions
+- Model loading events
+
+**Example log entry**:
+
+```
+2026-03-04 14:30:15 - Start of Prediction
+2026-03-04 14:30:16 - Data Load Successful
+2026-03-04 14:30:18 - Preprocessing completed
+2026-03-04 14:30:19 - KMeans model loaded
+2026-03-04 14:30:22 - Cluster 0 model loaded: XGBClassifier0
+2026-03-04 14:30:24 - Cluster 1 model loaded: RandomForestClassifier1
+2026-03-04 14:30:26 - End of Prediction
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Verify Row Count">
+    Always verify that the number of predictions matches the number of input records:
+    
+    ```python
+    input_rows = len(pd.read_csv('input_file.csv'))
+    prediction_rows = len(pd.read_csv('Prediction_Output_File/Predictions.csv'))
+    assert input_rows == prediction_rows, "Row count mismatch!"
+    ```
+  </Accordion>
+  
+  <Accordion title="Archive Results">
+    Save prediction results with timestamps for audit trails:
+    
+    ```python
+    from datetime import datetime
+    import shutil
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_path = f"Prediction_Archive/Predictions_{timestamp}.csv"
+    shutil.copy('Prediction_Output_File/Predictions.csv', archive_path)
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Empty Results">
+    Check for empty output files before processing:
+    
+    ```python
+    import os
+    
+    if os.path.exists('Prediction_Output_File/Predictions.csv'):
+        predictions = pd.read_csv('Prediction_Output_File/Predictions.csv')
+        if len(predictions) == 0:
+            print("Warning: No predictions generated")
+    else:
+        print("Error: Prediction file not found")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Prediction Overview" icon="compass" href="/prediction/overview">
+    Review the complete prediction workflow
+  </Card>
+  <Card title="Batch Prediction" icon="layer-group" href="/prediction/batch-prediction">
+    Learn how to process batch files
+  </Card>
+  <Card title="Data Validation" icon="shield-check" href="/prediction/data-validation">
+    Understand data validation requirements
+  </Card>
+</CardGroup>

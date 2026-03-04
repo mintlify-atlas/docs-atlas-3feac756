@@ -1,0 +1,301 @@
+---
+title: Data Validation
+description: Understand the automated validation process that ensures data quality before training
+---
+
+## Overview
+
+The `Raw_Data_validation` class performs comprehensive validation on training data files before they enter the ML pipeline. This automated process ensures data quality and prevents training failures.
+
+## Validation Class
+
+The validation system is implemented in `Training_Raw_data_validation/rawValidation.py`:
+
+```python
+class Raw_Data_validation:
+    def __init__(self, path):
+        self.Batch_Directory = path
+        self.schema_path = 'schema_training.json'
+        self.logger = App_Logger()
+```
+
+## Validation Pipeline
+
+The validation process consists of multiple stages:
+
+<Steps>
+  <Step title="Load Schema">
+    Extract validation rules from `schema_training.json`
+  </Step>
+  
+  <Step title="Validate Filenames">
+    Check that files match the required naming pattern
+  </Step>
+  
+  <Step title="Validate Column Count">
+    Ensure files have exactly 39 columns
+  </Step>
+  
+  <Step title="Check Missing Values">
+    Identify files with entire columns missing
+  </Step>
+  
+  <Step title="Archive Bad Data">
+    Move invalid files to archive for review
+  </Step>
+</Steps>
+
+## Schema Validation
+
+The system first loads validation parameters from the schema file:
+
+```python
+def valuesFromSchema(self):
+    try:
+        with open(self.schema_path, 'r') as f:
+            dic = json.load(f)
+            f.close()
+        
+        pattern = dic['SampleFileName']
+        LengthOfDateStampInFile = dic['LengthOfDateStampInFile']  # 9
+        LengthOfTimeStampInFile = dic['LengthOfTimeStampInFile']  # 6
+        column_names = dic['ColName']
+        NumberofColumns = dic['NumberofColumns']  # 39
+        
+        return LengthOfDateStampInFile, LengthOfTimeStampInFile, column_names, NumberofColumns
+        
+    except ValueError:
+        self.logger.log(file, "ValueError:Value not found inside schema_training.json")
+        raise ValueError
+    except KeyError:
+        self.logger.log(file, "KeyError:Key value error incorrect key passed")
+        raise KeyError
+```
+
+<Note>
+Validation parameters are logged to `Training_Logs/valuesfromSchemaValidationLog.txt` for audit purposes.
+</Note>
+
+## Filename Validation
+
+Files must match the regex pattern defined in the schema:
+
+### Regex Pattern
+
+```python
+def manualRegexCreation(self):
+    regex = "['fraudDetection']+['_'']+[\d_]+[\d]+\.csv"
+    return regex
+```
+
+### Validation Logic
+
+The system validates each file against this pattern:
+
+```python
+def validationFileNameRaw(self, regex, LengthOfDateStampInFile, LengthOfTimeStampInFile):
+    # Delete existing Good/Bad folders from previous runs
+    self.deleteExistingBadDataTrainingFolder()
+    self.deleteExistingGoodDataTrainingFolder()
+    
+    # Create fresh directories
+    self.createDirectoryForGoodBadRawData()
+    
+    onlyfiles = [f for f in listdir(self.Batch_Directory)]
+    
+    for filename in onlyfiles:
+        if (re.match(regex, filename)):
+            splitAtDot = re.split('.csv', filename)
+            splitAtDot = (re.split('_', splitAtDot[0]))
+            
+            # Validate date stamp length
+            if len(splitAtDot[1]) == LengthOfDateStampInFile:
+                # Validate time stamp length
+                if len(splitAtDot[2]) == LengthOfTimeStampInFile:
+                    shutil.copy("Training_Batch_Files/" + filename, 
+                               "Training_Raw_files_validated/Good_Raw")
+                    self.logger.log(f, "Valid File name!! File moved to GoodRaw Folder :: %s" % filename)
+                else:
+                    shutil.copy("Training_Batch_Files/" + filename, 
+                               "Training_Raw_files_validated/Bad_Raw")
+                    self.logger.log(f, "Invalid File Name!! File moved to Bad Raw Folder :: %s" % filename)
+        else:
+            shutil.copy("Training_Batch_Files/" + filename, 
+                       "Training_Raw_files_validated/Bad_Raw")
+            self.logger.log(f, "Invalid File Name!! File moved to Bad Raw Folder :: %s" % filename)
+```
+
+**What's Validated:**
+- Filename starts with `fraudDetection_`
+- Date stamp is exactly 9 characters
+- Time stamp is exactly 6 characters
+- File extension is `.csv`
+
+<Warning>
+Files with invalid names are immediately moved to `Bad_Raw/` and excluded from training.
+</Warning>
+
+## Column Count Validation
+
+Ensures each CSV file has the correct number of columns:
+
+```python
+def validateColumnLength(self, NumberofColumns):
+    try:
+        f = open("Training_Logs/columnValidationLog.txt", 'a+')
+        self.logger.log(f, "Column Length Validation Started!!")
+        
+        for file in listdir('Training_Raw_files_validated/Good_Raw/'):
+            csv = pd.read_csv("Training_Raw_files_validated/Good_Raw/" + file)
+            
+            if csv.shape[1] == NumberofColumns:  # Must be 39
+                pass  # File is valid
+            else:
+                # Move to Bad_Raw if column count doesn't match
+                shutil.move("Training_Raw_files_validated/Good_Raw/" + file, 
+                           "Training_Raw_files_validated/Bad_Raw")
+                self.logger.log(f, "Invalid Column Length for the file!! File moved to Bad Raw Folder :: %s" % file)
+        
+        self.logger.log(f, "Column Length Validation Completed!!")
+    except Exception as e:
+        self.logger.log(f, "Error Occured:: %s" % e)
+        raise e
+```
+
+**Validation Check:**
+- File must have exactly **39 columns**
+- Uses `pandas.shape[1]` to count columns
+- Invalid files moved from `Good_Raw/` to `Bad_Raw/`
+
+## Missing Values Validation
+
+Detects files where entire columns are missing:
+
+```python
+def validateMissingValuesInWholeColumn(self):
+    try:
+        f = open("Training_Logs/missingValuesInColumn.txt", 'a+')
+        self.logger.log(f, "Missing Values Validation Started!!")
+        
+        for file in listdir('Training_Raw_files_validated/Good_Raw/'):
+            csv = pd.read_csv("Training_Raw_files_validated/Good_Raw/" + file)
+            count = 0
+            
+            for columns in csv:
+                # Check if entire column is missing
+                if (len(csv[columns]) - csv[columns].count()) == len(csv[columns]):
+                    count += 1
+                    shutil.move("Training_Raw_files_validated/Good_Raw/" + file,
+                               "Training_Raw_files_validated/Bad_Raw")
+                    self.logger.log(f, "Invalid Column for the file!! File moved to Bad Raw Folder :: %s" % file)
+                    break
+            
+            # If file is valid, rename any unnamed columns
+            if count == 0:
+                csv.rename(columns={"Unnamed: 0": "Wafer"}, inplace=True)
+                csv.to_csv("Training_Raw_files_validated/Good_Raw/" + file, index=None, header=True)
+                
+    except Exception as e:
+        self.logger.log(f, "Error Occured:: %s" % e)
+        raise e
+```
+
+<Note>
+Individual missing values are acceptable and will be imputed during preprocessing. This check only flags files where **all values** in a column are missing.
+</Note>
+
+## Directory Management
+
+The validation system automatically manages data folders:
+
+### Creating Validation Directories
+
+```python
+def createDirectoryForGoodBadRawData(self):
+    try:
+        path = os.path.join("Training_Raw_files_validated/", "Good_Raw/")
+        if not os.path.isdir(path):
+            os.makedirs(path)
+        
+        path = os.path.join("Training_Raw_files_validated/", "Bad_Raw/")
+        if not os.path.isdir(path):
+            os.makedirs(path)
+    except OSError as ex:
+        self.logger.log(file, "Error while creating Directory %s:" % ex)
+        raise OSError
+```
+
+### Archiving Bad Data
+
+```python
+def moveBadFilesToArchiveBad(self):
+    now = datetime.now()
+    date = now.date()
+    time = now.strftime("%H%M%S")
+    
+    try:
+        source = 'Training_Raw_files_validated/Bad_Raw/'
+        if os.path.isdir(source):
+            path = "TrainingArchiveBadData"
+            if not os.path.isdir(path):
+                os.makedirs(path)
+            
+            # Create timestamped archive folder
+            dest = 'TrainingArchiveBadData/BadData_' + str(date) + "_" + str(time)
+            if not os.path.isdir(dest):
+                os.makedirs(dest)
+            
+            # Move all bad files to archive
+            files = os.listdir(source)
+            for f in files:
+                if f not in os.listdir(dest):
+                    shutil.move(source + f, dest)
+            
+            self.logger.log(file, "Bad files moved to archive")
+    except Exception as e:
+        self.logger.log(file, "Error while moving bad files to archive:: %s" % e)
+        raise e
+```
+
+<Warning>
+Bad files are archived with timestamps for later review. Review these files to identify data quality issues.
+</Warning>
+
+## Validation Logs
+
+All validation activities are logged to:
+
+- `Training_Logs/valuesfromSchemaValidationLog.txt` - Schema loading
+- `Training_Logs/nameValidationLog.txt` - Filename validation
+- `Training_Logs/columnValidationLog.txt` - Column count validation
+- `Training_Logs/missingValuesInColumn.txt` - Missing value checks
+- `Training_Logs/GeneralLog.txt` - Directory operations
+
+## Validation Results
+
+After validation completes:
+
+| Folder | Contents | Next Action |
+|--------|----------|-------------|
+| `Good_Raw/` | Valid files ready for training | Proceed to preprocessing |
+| `Bad_Raw/` | Invalid files | Archived to `TrainingArchiveBadData/` |
+| `TrainingArchiveBadData/` | Historical bad files | Review for data quality issues |
+
+## Error Handling
+
+The validation system handles multiple error types:
+
+- **ValueError:** Missing values in schema JSON
+- **KeyError:** Incorrect keys in schema JSON
+- **OSError:** File system operations failed
+- **Exception:** General validation errors
+
+All errors are logged with detailed messages for troubleshooting.
+
+## Next Steps
+
+After successful validation:
+
+1. Review validation logs for any warnings
+2. Investigate files in `TrainingArchiveBadData/` if present
+3. Proceed to [preprocessing](/training/preprocessing) for valid data

@@ -1,0 +1,438 @@
+---
+title: 'Preprocessor'
+description: 'Data preprocessing and transformation module for fraud detection'
+icon: 'filter'
+---
+
+## Overview
+
+The `Preprocessor` class provides comprehensive data cleaning and transformation capabilities for preparing raw fraud detection data for machine learning. It handles missing values, categorical encoding, feature scaling, and dataset balancing.
+
+## Class: Preprocessor
+
+**Location:** `source/data_preprocessing/preprocessing.py`
+
+**Version:** 1.0
+
+### Constructor
+
+```python
+Preprocessor(file_object, logger_object)
+```
+
+<ParamField path="file_object" type="File" required>
+  File object for logging operations
+</ParamField>
+
+<ParamField path="logger_object" type="Logger" required>
+  Logger instance for tracking preprocessing steps
+</ParamField>
+
+---
+
+## Methods
+
+### remove_columns()
+
+Removes specified columns from a pandas DataFrame.
+
+```python
+remove_columns(data, columns)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  Input DataFrame to process
+</ParamField>
+
+<ParamField path="columns" type="list" required>
+  List of column names to remove
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with specified columns removed
+</ResponseField>
+
+**Example Usage:**
+
+```python
+preprocessor = Preprocessor(file_object, logger_object)
+df_cleaned = preprocessor.remove_columns(data, ['unwanted_col1', 'unwanted_col2'])
+```
+
+**Implementation:**
+
+```python
+self.useful_data = self.data.drop(labels=self.columns, axis=1)
+return self.useful_data
+```
+
+---
+
+### remove_unwanted_spaces()
+
+Removes leading and trailing whitespace from all string columns in the DataFrame.
+
+```python
+remove_unwanted_spaces(data)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  Input DataFrame with potential whitespace issues
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with stripped string values
+</ResponseField>
+
+**Example Usage:**
+
+```python
+df_trimmed = preprocessor.remove_unwanted_spaces(data)
+```
+
+**Implementation:**
+
+```python
+self.df_without_spaces = self.data.apply(
+    lambda x: x.str.strip() if x.dtype == "object" else x
+)
+return self.df_without_spaces
+```
+
+---
+
+### separate_label_feature()
+
+Separates feature columns from the target label column.
+
+```python
+separate_label_feature(data, label_column_name)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  Complete dataset with features and labels
+</ParamField>
+
+<ParamField path="label_column_name" type="str" required>
+  Name of the target column to separate
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  Tuple containing (X, Y) where X is features DataFrame and Y is target Series
+</ResponseField>
+
+**Example Usage:**
+
+```python
+X, Y = preprocessor.separate_label_feature(data, 'fraud_reported')
+```
+
+**Implementation:**
+
+```python
+self.X = data.drop(labels=label_column_name, axis=1)
+self.Y = data[label_column_name]
+return self.X, self.Y
+```
+
+---
+
+### is_null_present()
+
+Checks for null values in the DataFrame and saves a report to CSV.
+
+```python
+is_null_present(data)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  DataFrame to check for missing values
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  Tuple containing (null_present: bool, cols_with_missing_values: list)
+</ResponseField>
+
+**Example Usage:**
+
+```python
+has_nulls, null_columns = preprocessor.is_null_present(data)
+if has_nulls:
+    print(f"Columns with nulls: {null_columns}")
+```
+
+**Implementation:**
+
+```python
+self.null_counts = data.isna().sum()
+for i in range(len(self.null_counts)):
+    if self.null_counts[i] > 0:
+        self.null_present = True
+        self.cols_with_missing_values.append(self.cols[i])
+
+if self.null_present:
+    self.dataframe_with_null = pd.DataFrame()
+    self.dataframe_with_null['columns'] = data.columns
+    self.dataframe_with_null['missing values count'] = np.asarray(data.isna().sum())
+    self.dataframe_with_null.to_csv('preprocessing_data/null_values.csv')
+
+return self.null_present, self.cols_with_missing_values
+```
+
+**Output File:** `preprocessing_data/null_values.csv` - CSV report of null value counts per column
+
+---
+
+### impute_missing_values()
+
+Imputes missing values in specified columns using Categorical Imputer.
+
+```python
+impute_missing_values(data, cols_with_missing_values)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  DataFrame with missing values
+</ParamField>
+
+<ParamField path="cols_with_missing_values" type="list" required>
+  List of column names containing null values
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with imputed values
+</ResponseField>
+
+**Example Usage:**
+
+```python
+has_nulls, null_cols = preprocessor.is_null_present(data)
+if has_nulls:
+    data = preprocessor.impute_missing_values(data, null_cols)
+```
+
+**Implementation:**
+
+```python
+self.imputer = CategoricalImputer()
+for col in self.cols_with_missing_values:
+    self.data[col] = self.imputer.fit_transform(self.data[col])
+return self.data
+```
+
+<Note>
+  Uses `sklearn_pandas.CategoricalImputer` for imputation strategy
+</Note>
+
+---
+
+### encode_categorical_columns()
+
+Encodes categorical variables to numerical values using ordinal encoding and one-hot encoding.
+
+```python
+encode_categorical_columns(data)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  DataFrame with categorical columns
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with all categorical values converted to numerical
+</ResponseField>
+
+**Encoding Mappings:**
+
+- `policy_csl`: `{'100/300': 1, '250/500': 2.5, '500/1000': 5}`
+- `insured_education_level`: `{'JD': 1, 'High School': 2, 'College': 3, 'Masters': 4, 'Associate': 5, 'MD': 6, 'PhD': 7}`
+- `incident_severity`: `{'Trivial Damage': 1, 'Minor Damage': 2, 'Major Damage': 3, 'Total Loss': 4}`
+- `insured_sex`: `{'FEMALE': 0, 'MALE': 1}`
+- `property_damage`: `{'NO': 0, 'YES': 1}`
+- `police_report_available`: `{'NO': 0, 'YES': 1}`
+- `fraud_reported`: `{'N': 0, 'Y': 1}` (training only)
+
+**Example Usage:**
+
+```python
+df_encoded = preprocessor.encode_categorical_columns(data)
+```
+
+**Implementation:**
+
+```python
+self.cat_df = self.data.select_dtypes(include=['object']).copy()
+self.cat_df['policy_csl'] = self.cat_df['policy_csl'].map(
+    {'100/300': 1, '250/500': 2.5, '500/1000': 5}
+)
+# ... additional ordinal mappings ...
+
+# One-hot encoding for remaining categorical columns
+for col in self.cat_df.drop(columns=self.cols_to_drop).columns:
+    self.cat_df = pd.get_dummies(
+        self.cat_df, 
+        columns=[col], 
+        prefix=[col], 
+        drop_first=True
+    )
+
+self.data.drop(columns=self.data.select_dtypes(include=['object']).columns, inplace=True)
+self.data = pd.concat([self.cat_df, self.data], axis=1)
+return self.data
+```
+
+<Tip>
+  The method automatically handles both training (with `fraud_reported`) and prediction modes
+</Tip>
+
+---
+
+### scale_numerical_columns()
+
+Scales numerical features using StandardScaler for normalization.
+
+```python
+scale_numerical_columns(data)
+```
+
+<ParamField path="data" type="pandas.DataFrame" required>
+  DataFrame with numerical columns to scale
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with scaled numerical features
+</ResponseField>
+
+**Scaled Features:**
+
+- `months_as_customer`
+- `policy_deductable`
+- `umbrella_limit`
+- `capital-gains`
+- `capital-loss`
+- `incident_hour_of_the_day`
+- `number_of_vehicles_involved`
+- `bodily_injuries`
+- `witnesses`
+- `injury_claim`
+- `property_claim`
+- `vehicle_claim`
+
+**Example Usage:**
+
+```python
+df_scaled = preprocessor.scale_numerical_columns(data)
+```
+
+**Implementation:**
+
+```python
+self.num_df = self.data[[
+    'months_as_customer', 'policy_deductable', 'umbrella_limit',
+    'capital-gains', 'capital-loss', 'incident_hour_of_the_day',
+    'number_of_vehicles_involved', 'bodily_injuries', 'witnesses', 
+    'injury_claim', 'property_claim', 'vehicle_claim'
+]]
+
+self.scaler = StandardScaler()
+self.scaled_data = self.scaler.fit_transform(self.num_df)
+self.scaled_num_df = pd.DataFrame(
+    data=self.scaled_data, 
+    columns=self.num_df.columns, 
+    index=self.data.index
+)
+self.data.drop(columns=self.scaled_num_df.columns, inplace=True)
+self.data = pd.concat([self.scaled_num_df, self.data], axis=1)
+return self.data
+```
+
+<Note>
+  Uses `sklearn.preprocessing.StandardScaler` which standardizes features by removing the mean and scaling to unit variance
+</Note>
+
+---
+
+### handle_imbalanced_dataset()
+
+Balances the dataset using Random Over Sampling to address class imbalance.
+
+```python
+handle_imbalanced_dataset(x, y)
+```
+
+<ParamField path="x" type="pandas.DataFrame" required>
+  Feature matrix
+</ParamField>
+
+<ParamField path="y" type="pandas.Series" required>
+  Target labels
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  Tuple containing (x_sampled, y_sampled) with balanced class distribution
+</ResponseField>
+
+**Example Usage:**
+
+```python
+X_balanced, Y_balanced = preprocessor.handle_imbalanced_dataset(X, Y)
+print(f"Original shape: {X.shape}, Balanced shape: {X_balanced.shape}")
+```
+
+**Implementation:**
+
+```python
+self.rdsmple = RandomOverSampler()
+self.x_sampled, self.y_sampled = self.rdsmple.fit_sample(x, y)
+return self.x_sampled, self.y_sampled
+```
+
+<Warning>
+  Over-sampling increases the dataset size. Ensure sufficient memory is available.
+</Warning>
+
+---
+
+## Complete Preprocessing Pipeline
+
+Here's a typical preprocessing workflow:
+
+```python
+from data_preprocessing.preprocessing import Preprocessor
+
+# Initialize
+preprocessor = Preprocessor(file_object, logger_object)
+
+# 1. Remove unwanted spaces
+data = preprocessor.remove_unwanted_spaces(data)
+
+# 2. Remove unnecessary columns
+data = preprocessor.remove_columns(data, ['policy_number'])
+
+# 3. Check and handle missing values
+has_nulls, null_cols = preprocessor.is_null_present(data)
+if has_nulls:
+    data = preprocessor.impute_missing_values(data, null_cols)
+
+# 4. Encode categorical variables
+data = preprocessor.encode_categorical_columns(data)
+
+# 5. Scale numerical features
+data = preprocessor.scale_numerical_columns(data)
+
+# 6. Separate features and labels
+X, Y = preprocessor.separate_label_feature(data, 'fraud_reported')
+
+# 7. Handle imbalanced dataset
+X_balanced, Y_balanced = preprocessor.handle_imbalanced_dataset(X, Y)
+```
+
+## Dependencies
+
+```python
+import pandas as pd
+import numpy as np
+from sklearn_pandas import CategoricalImputer
+from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import RandomOverSampler
+```

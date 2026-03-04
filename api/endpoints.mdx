@@ -1,0 +1,67 @@
+---
+title: 'API Overview'
+description: 'Overview of the Fraud Detection ML System API endpoints'
+---
+
+## Flask Application
+
+The Fraud Detection ML System is built using Flask, a lightweight Python web framework. The API provides endpoints for training machine learning models and making predictions on fraud detection datasets.
+
+## Base URL
+
+```
+http://127.0.0.1:5001
+```
+
+The default port is 5001, but can be configured using the `PORT` environment variable.
+
+## Available Endpoints
+
+The API exposes the following endpoints:
+
+<CardGroup cols={2}>
+  <Card title="POST /train" icon="brain" href="/api/train">
+    Train a new fraud detection model using data from a specified folder
+  </Card>
+  <Card title="POST /predict" icon="wand-magic-sparkles" href="/api/predict">
+    Make predictions on new data using the trained model
+  </Card>
+</CardGroup>
+
+## Authentication
+
+Currently, the API does not require authentication. All endpoints are publicly accessible.
+
+<Warning>
+  In a production environment, you should implement proper authentication and authorization mechanisms to secure these endpoints.
+</Warning>
+
+## CORS Configuration
+
+Cross-Origin Resource Sharing (CORS) is enabled for all endpoints using `flask-cors`. All origins are currently allowed via:
+
+```python
+from flask_cors import CORS, cross_origin
+
+CORS(app)
+```
+
+Each endpoint is also decorated with `@cross_origin()` to handle preflight requests.
+
+## Monitoring Dashboard
+
+The application includes Flask Monitoring Dashboard for tracking API performance and usage:
+
+```python
+import flask_monitoringdashboard as dashboard
+dashboard.bind(app)
+```
+
+## Error Handling
+
+All endpoints implement comprehensive error handling for:
+- `ValueError` - Invalid input values
+- `KeyError` - Missing required parameters
+- `Exception` - General exceptions
+
+Error responses are returned as plain text with descriptive messages.

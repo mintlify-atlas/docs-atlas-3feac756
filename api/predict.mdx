@@ -1,0 +1,220 @@
+---
+title: 'POST /predict'
+description: 'Make fraud predictions on new transaction data'
+---
+
+## Endpoint
+
+```
+POST /predict
+```
+
+Makes fraud predictions on new transaction data using the trained model. This endpoint accepts data file paths and returns predictions in a CSV file.
+
+## Request Body
+
+The endpoint accepts requests in two formats: **JSON** or **form data**.
+
+### JSON Format
+
+<ParamField body="filepath" type="string" required>
+  The file system path to the folder containing prediction data files. This folder should contain properly formatted CSV files with transaction data to classify.
+</ParamField>
+
+```json
+{
+  "filepath": "/path/to/prediction/data"
+}
+```
+
+### Form Data Format
+
+<ParamField body="filepath" type="string" required>
+  The file system path to the folder containing prediction data files, sent as form data.
+</ParamField>
+
+## Prediction Workflow
+
+When the `/predict` endpoint is called, the following process is executed:
+
+1. **Validation** - The `pred_validation` object validates the prediction data structure
+2. **Data Processing** - Prediction data is validated and prepared for inference
+3. **Prediction** - The `prediction` object loads the trained model and generates predictions
+4. **Output** - Predictions are saved to a CSV file
+
+```python
+pred_val = pred_validation(path)
+pred_val.prediction_validation()
+
+pred = prediction(path)
+path = pred.predictionFromModel()
+```
+
+## Response
+
+<ResponseField name="success" type="string">
+  Returns the file path where the prediction results have been saved.
+</ResponseField>
+
+### Success Response
+
+```
+Prediction File created at /path/to/predictions/Predictions.csv!!!
+```
+
+The response includes the full path to the generated predictions file.
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  Returns an error message if prediction fails.
+</ResponseField>
+
+Possible error responses:
+
+```
+Error Occurred! <class 'ValueError'>
+Error Occurred! <class 'KeyError'>
+Error Occurred! {exception_message}
+```
+
+## Example Requests
+
+### cURL (JSON)
+
+```bash
+curl -X POST http://127.0.0.1:5001/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filepath": "/home/user/fraud_detection/prediction_data"
+  }'
+```
+
+### cURL (Form Data)
+
+```bash
+curl -X POST http://127.0.0.1:5001/predict \
+  -F "filepath=/home/user/fraud_detection/prediction_data"
+```
+
+### Python (requests - JSON)
+
+```python
+import requests
+
+url = "http://127.0.0.1:5001/predict"
+payload = {
+    "filepath": "/home/user/fraud_detection/prediction_data"
+}
+
+response = requests.post(url, json=payload)
+print(response.text)
+# Output: Prediction File created at /path/to/predictions/Predictions.csv!!!
+```
+
+### Python (requests - Form Data)
+
+```python
+import requests
+
+url = "http://127.0.0.1:5001/predict"
+data = {
+    "filepath": "/home/user/fraud_detection/prediction_data"
+}
+
+response = requests.post(url, data=data)
+print(response.text)
+```
+
+### JavaScript (fetch - JSON)
+
+```javascript
+fetch('http://127.0.0.1:5001/predict', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    filepath: '/home/user/fraud_detection/prediction_data'
+  })
+})
+.then(response => response.text())
+.then(data => console.log(data));
+```
+
+## Error Handling
+
+The endpoint handles the following error cases:
+
+<AccordionGroup>
+  <Accordion title="ValueError">
+    Raised when the provided file path or data format is invalid.
+    
+    ```
+    Error Occurred! <class 'ValueError'>
+    ```
+  </Accordion>
+  
+  <Accordion title="KeyError">
+    Raised when the required `filepath` parameter is missing from the request.
+    
+    ```
+    Error Occurred! <class 'KeyError'>
+    ```
+  </Accordion>
+  
+  <Accordion title="General Exception">
+    Catches any other exceptions during the prediction process and returns the specific error message.
+    
+    ```
+    Error Occurred! {specific_error_message}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Implementation Details
+
+The endpoint implementation from `main.py:25-61`:
+
+```python
+@app.route("/predict", methods=['POST'])
+@cross_origin()
+def predictRouteClient():
+    try:
+        if request.json is not None:
+            path = request.json['filepath']
+            
+            pred_val = pred_validation(path)
+            pred_val.prediction_validation()
+            
+            pred = prediction(path)
+            path = pred.predictionFromModel()
+            return Response("Prediction File created at %s!!!" % path)
+
+        elif request.form is not None:
+            path = request.form['filepath']
+            
+            pred_val = pred_validation(path)
+            pred_val.prediction_validation()
+            
+            pred = prediction(path)
+            path = pred.predictionFromModel()
+            return Response("Prediction File created at %s!!!" % path)
+
+    except ValueError:
+        return Response("Error Occurred! %s" %ValueError)
+    except KeyError:
+        return Response("Error Occurred! %s" %KeyError)
+    except Exception as e:
+        return Response("Error Occurred! %s" %e)
+```
+
+## Notes
+
+<Note>
+  The endpoint accepts both JSON and form data formats for flexibility. Both formats trigger the same prediction workflow and return identical results.
+</Note>
+
+<Info>
+  Prediction results are automatically saved to a CSV file. The exact location is determined by the prediction module configuration.
+</Info>

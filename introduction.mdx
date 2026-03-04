@@ -1,0 +1,233 @@
+---
+title: Introduction
+description: Welcome to the Fraud Detection System documentation
+mode: custom
+---
+
+<div className="relative overflow-hidden bg-gradient-to-br from-[#E74C3C] via-[#C0392B] to-[#A93226] dark:from-[#C0392B] dark:via-[#A93226] dark:to-[#922B21] py-20">
+  <div className="max-w-6xl mx-auto px-6 sm:px-8">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Fraud Detection System
+        </h1>
+        <p className="text-lg sm:text-xl text-white/90 mb-8 max-w-2xl">
+          End-to-end machine learning system for detecting fraudulent insurance claims using Flask, XGBoost, and K-Means clustering
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 bg-white text-[#E74C3C] font-semibold rounded-lg hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+          </a>
+          <a 
+            href="/api/endpoints" 
+            className="inline-flex items-center px-6 py-3 border border-white/30 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-white/10 rounded-2xl backdrop-blur-sm"></div>
+          <div className="relative p-8">
+            <div className="space-y-3">
+              <div className="h-3 bg-white/30 rounded w-3/4"></div>
+              <div className="h-3 bg-white/30 rounded w-full"></div>
+              <div className="h-3 bg-white/30 rounded w-5/6"></div>
+              <div className="mt-6 h-32 bg-white/20 rounded-lg"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Quick Start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get up and running with the fraud detection system in minutes
+  </p>
+
+  <Steps>
+    <Step title="Clone the repository">
+      Clone the fraud detection project to your local machine:
+      
+      ```bash
+      git clone https://github.com/sujith52/fraud.git
+      cd fraud
+      ```
+    </Step>
+    
+    <Step title="Set up environment">
+      Create a conda environment with Python 3.8 and install dependencies:
+      
+      ```bash
+      conda create -n fraud-env python=3.8 -y
+      conda activate fraud-env
+      pip install -r requirements.txt
+      ```
+      
+      <Note>
+        The project uses specific library versions (Flask 1.1.1, scikit-learn 0.22.1, XGBoost 0.90) for compatibility.
+      </Note>
+    </Step>
+    
+    <Step title="Start the Flask application">
+      Run the application locally:
+      
+      ```bash
+      python main.py
+      ```
+      
+      The server will start at `http://127.0.0.1:5001`
+    </Step>
+    
+    <Step title="Make your first prediction">
+      Upload a CSV file with insurance claims data through the web interface or use the API:
+      
+      ```bash
+      curl -X POST http://127.0.0.1:5001/predict \
+        -H "Content-Type: application/json" \
+        -d '{"filepath": "Prediction_Batch_files/"}'
+      ```
+      
+      <Accordion title="Example Response">
+        ```
+        Prediction File created at Prediction_Output_File/Predictions.csv!!!
+        ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Key Features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need for production-ready fraud detection
+  </p>
+
+  <CardGroup cols={2}>
+    <Card title="Multi-Model Detection" icon="brain" href="/training/model-selection">
+      Automatically selects the best model between XGBoost and SVM using cross-validation and AUC scoring
+    </Card>
+    <Card title="K-Means Clustering" icon="chart-network" href="/training/clustering">
+      Segments data into clusters using the elbow method for optimized model training per cluster
+    </Card>
+    <Card title="Data Validation" icon="shield-check" href="/training/data-validation">
+      Validates schema, file naming conventions, and data types before processing
+    </Card>
+    <Card title="Batch Processing" icon="layer-group" href="/prediction/batch-prediction">
+      Process multiple insurance claims in batch mode with CSV output
+    </Card>
+    <Card title="Flask API" icon="server" href="/api/endpoints">
+      RESTful API endpoints for training models and generating predictions
+    </Card>
+    <Card title="Monitoring Dashboard" icon="chart-line" href="/deployment/monitoring">
+      Built-in Flask monitoring dashboard for tracking API performance
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Explore by Topic
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Deep dive into specific areas of the system
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/concepts/architecture" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#E74C3C] dark:hover:border-[#E74C3C] overflow-hidden transition-colors no-underline">
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          System Architecture
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Understand the ML pipeline from data ingestion to prediction serving
+        </p>
+        <div className="flex items-center text-sm text-[#E74C3C] group-hover:text-[#C0392B] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/training/preprocessing" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#E74C3C] dark:hover:border-[#E74C3C] overflow-hidden transition-colors no-underline">
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Data Preprocessing
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Feature engineering, encoding, scaling, and handling missing values
+        </p>
+        <div className="flex items-center text-sm text-[#E74C3C] group-hover:text-[#C0392B] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/api/modules/model-finder" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#E74C3C] dark:hover:border-[#E74C3C] overflow-hidden transition-colors no-underline">
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Model Selection
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Hyperparameter tuning with GridSearchCV for XGBoost and SVM
+        </p>
+        <div className="flex items-center text-sm text-[#E74C3C] group-hover:text-[#C0392B] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/deployment/setup" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#E74C3C] dark:hover:border-[#E74C3C] overflow-hidden transition-colors no-underline">
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Production Deployment
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Deploy to Heroku or your own infrastructure with Gunicorn
+        </p>
+        <div className="flex items-center text-sm text-[#E74C3C] group-hover:text-[#C0392B] font-medium">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gradient-to-br from-gray-50 to-white dark:from-[#1a1d27] dark:to-[#0f1117] p-8 sm:p-12">
+    <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+      Ready to detect fraud?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 mb-6 max-w-2xl">
+      Follow the quickstart guide to set up the system and start detecting fraudulent insurance claims in minutes.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-6 py-3 bg-[#E74C3C] text-white font-semibold rounded-lg hover:bg-[#C0392B] transition-colors no-underline"
+    >
+      Get Started
+    </a>
+  </div>
+</div>

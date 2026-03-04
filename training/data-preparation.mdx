@@ -1,0 +1,271 @@
+---
+title: Data Preparation
+description: Learn how to prepare your fraud detection training data with the correct format, schema, and naming conventions
+---
+
+## Overview
+
+The fraud detection system requires training data in a specific CSV format with 39 columns. This guide covers the input requirements, schema structure, and file naming conventions.
+
+## Input Data Format
+
+Training data must be provided as CSV files following these requirements:
+
+<Note>
+All CSV files must contain exactly **39 columns** matching the schema definition.
+</Note>
+
+### File Naming Convention
+
+Files must follow this pattern:
+
+```
+fraudDetection_[DATESTAMP]_[TIMESTAMP].csv
+```
+
+**Example:** `fraudDetection_021119920_010222.csv`
+
+- **Prefix:** `fraudDetection_`
+- **Date stamp:** 9 characters (e.g., `021119920`)
+- **Time stamp:** 6 characters (e.g., `010222`)
+- **Extension:** `.csv`
+
+<Warning>
+Files that don't match this naming pattern will be rejected and moved to the Bad_Raw folder during validation.
+</Warning>
+
+## Schema Definition
+
+The system uses `schema_training.json` to validate incoming data:
+
+```json
+{
+  "SampleFileName": "fraudDetection_021119920_010222.csv",
+  "LengthOfDateStampInFile": 9,
+  "LengthOfTimeStampInFile": 6,
+  "NumberofColumns": 39
+}
+```
+
+### Required Columns (39 Total)
+
+The dataset must include these columns with their respective data types:
+
+#### Customer Information
+
+<ParamField path="months_as_customer" type="Integer">
+  Number of months the customer has been with the insurance company
+</ParamField>
+
+<ParamField path="age" type="Integer">
+  Age of the insured person
+</ParamField>
+
+<ParamField path="insured_zip" type="Integer">
+  ZIP code of the insured
+</ParamField>
+
+<ParamField path="insured_sex" type="varchar">
+  Gender of the insured (MALE/FEMALE)
+</ParamField>
+
+<ParamField path="insured_education_level" type="varchar">
+  Education level (JD, High School, College, Masters, Associate, MD, PhD)
+</ParamField>
+
+<ParamField path="insured_occupation" type="varchar">
+  Occupation of the insured
+</ParamField>
+
+<ParamField path="insured_hobbies" type="varchar">
+  Hobbies of the insured
+</ParamField>
+
+<ParamField path="insured_relationship" type="varchar">
+  Relationship status
+</ParamField>
+
+#### Policy Information
+
+<ParamField path="policy_number" type="Integer">
+  Unique policy identifier
+</ParamField>
+
+<ParamField path="policy_bind_date" type="varchar">
+  Date when policy was bound
+</ParamField>
+
+<ParamField path="policy_state" type="varchar">
+  State where policy is issued
+</ParamField>
+
+<ParamField path="policy_csl" type="varchar">
+  Combined single limit (100/300, 250/500, 500/1000)
+</ParamField>
+
+<ParamField path="policy_deductable" type="Integer">
+  Policy deductible amount
+</ParamField>
+
+<ParamField path="policy_annual_premium" type="Integer">
+  Annual premium amount
+</ParamField>
+
+<ParamField path="umbrella_limit" type="Integer">
+  Umbrella policy limit
+</ParamField>
+
+#### Financial Information
+
+<ParamField path="capital-gains" type="Integer">
+  Capital gains of the insured
+</ParamField>
+
+<ParamField path="capital-loss" type="Integer">
+  Capital losses of the insured
+</ParamField>
+
+<ParamField path="total_claim_amount" type="Integer">
+  Total claim amount
+</ParamField>
+
+<ParamField path="injury_claim" type="Integer">
+  Injury claim amount
+</ParamField>
+
+<ParamField path="property_claim" type="Integer">
+  Property damage claim amount
+</ParamField>
+
+<ParamField path="vehicle_claim" type="Integer">
+  Vehicle damage claim amount
+</ParamField>
+
+#### Incident Information
+
+<ParamField path="incident_date" type="varchar">
+  Date of the incident
+</ParamField>
+
+<ParamField path="incident_type" type="varchar">
+  Type of incident
+</ParamField>
+
+<ParamField path="collision_type" type="varchar">
+  Type of collision
+</ParamField>
+
+<ParamField path="incident_severity" type="varchar">
+  Severity level (Trivial Damage, Minor Damage, Major Damage, Total Loss)
+</ParamField>
+
+<ParamField path="authorities_contacted" type="varchar">
+  Which authorities were contacted
+</ParamField>
+
+<ParamField path="incident_state" type="varchar">
+  State where incident occurred
+</ParamField>
+
+<ParamField path="incident_city" type="varchar">
+  City where incident occurred
+</ParamField>
+
+<ParamField path="incident_location" type="varchar">
+  Specific location of incident
+</ParamField>
+
+<ParamField path="incident_hour_of_the_day" type="Integer">
+  Hour when incident occurred (0-23)
+</ParamField>
+
+<ParamField path="number_of_vehicles_involved" type="Integer">
+  Number of vehicles in the incident
+</ParamField>
+
+<ParamField path="property_damage" type="varchar">
+  Whether property damage occurred (YES/NO)
+</ParamField>
+
+<ParamField path="bodily_injuries" type="Integer">
+  Number of bodily injuries
+</ParamField>
+
+<ParamField path="witnesses" type="Integer">
+  Number of witnesses
+</ParamField>
+
+<ParamField path="police_report_available" type="varchar">
+  Whether police report is available (YES/NO)
+</ParamField>
+
+#### Vehicle Information
+
+<ParamField path="auto_make" type="varchar">
+  Make of the vehicle
+</ParamField>
+
+<ParamField path="auto_model" type="varchar">
+  Model of the vehicle
+</ParamField>
+
+<ParamField path="auto_year" type="Integer">
+  Year of the vehicle
+</ParamField>
+
+#### Target Variable
+
+<ParamField path="fraud_reported" type="varchar">
+  Whether fraud was reported (Y/N) - this is the target variable for training
+</ParamField>
+
+## Sample Data Structure
+
+Here's an example of how your CSV data should be structured:
+
+```csv
+months_as_customer,age,policy_number,policy_bind_date,policy_state,policy_csl,...,fraud_reported
+328,48,521585,2014-10-17,OH,250/500,...,Y
+228,42,342868,2006-04-03,IN,250/500,...,Y
+134,29,687698,2000-06-22,OH,100/300,...,N
+```
+
+## Data Validation
+
+After preparing your data files:
+
+1. Place them in the `Training_Batch_Files/` directory
+2. The validation process will automatically:
+   - Check file naming conventions
+   - Verify column count (must be 39)
+   - Validate data types
+   - Move valid files to `Good_Raw/` folder
+   - Move invalid files to `Bad_Raw/` folder
+
+<Note>
+Missing values are acceptable and will be handled during preprocessing. Use `?` or leave cells empty for missing values.
+</Note>
+
+## Next Steps
+
+Once your data is prepared:
+
+<Steps>
+  <Step title="Validate Data">
+    Run the data validation process to ensure files meet requirements
+  </Step>
+  
+  <Step title="Review Validation Logs">
+    Check `Training_Logs/` for any validation errors
+  </Step>
+  
+  <Step title="Preprocess Data">
+    Move to the preprocessing stage for feature engineering
+  </Step>
+</Steps>
+
+## Common Issues
+
+- **File rejected during validation:** Check that filename matches the exact pattern
+- **Column count mismatch:** Ensure CSV has all 39 columns in the correct order
+- **Data type errors:** Verify that numeric fields contain only numbers (except for missing values)

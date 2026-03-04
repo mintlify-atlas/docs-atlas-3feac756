@@ -1,0 +1,315 @@
+---
+title: Monitoring Dashboard
+description: Monitor your fraud detection system with Flask-MonitoringDashboard
+---
+
+## Overview
+
+The fraud detection system includes **Flask-MonitoringDashboard** for real-time monitoring of application performance, API usage, and system metrics.
+
+## Dashboard Setup
+
+### Installation and Binding
+
+The monitoring dashboard is integrated in `main.py`:
+
+```python
+import flask_monitoringdashboard as dashboard
+from flask import Flask
+
+app = Flask(__name__)
+dashboard.bind(app)
+```
+
+This simple integration automatically:
+- Creates the monitoring database (`flask_monitoringdashboard.db`)
+- Registers dashboard routes
+- Begins tracking all endpoints
+- Collects performance metrics
+
+### Dependencies
+
+Flask-MonitoringDashboard version 3.0.6 is included in `requirements.txt`:
+
+```
+Flask-MonitoringDashboard==3.0.6
+```
+
+## Accessing the Dashboard
+
+### Dashboard Endpoint
+
+The monitoring dashboard is accessible at:
+
+```
+http://your-domain.com/dashboard
+```
+
+**Local development:**
+```
+http://localhost:5001/dashboard
+```
+
+**Production:**
+```
+https://your-app.herokuapp.com/dashboard
+```
+
+### First-Time Setup
+
+On first access, you'll be prompted to create an admin account:
+1. Navigate to `/dashboard`
+2. Enter a username and password
+3. Submit to create your admin account
+4. Login with your credentials
+
+## Dashboard Features
+
+### Performance Tracking
+
+The dashboard automatically tracks:
+
+**Request Metrics:**
+- Request duration (min, max, average)
+- Request count per endpoint
+- Response time distribution
+- Slow requests identification
+
+**Endpoint Performance:**
+- `/` (Home page)
+- `/predict` (Fraud prediction)
+- `/train` (Model training)
+
+### API Usage Monitoring
+
+**Request Analysis:**
+- Total requests over time
+- Requests per endpoint
+- Request methods (GET, POST)
+- HTTP status codes distribution
+
+**User Activity:**
+- IP address tracking
+- Request timestamps
+- User sessions
+
+### System Metrics
+
+**Resource Utilization:**
+- CPU usage
+- Memory consumption
+- Process information
+- Active workers (when using Gunicorn)
+
+**Database Metrics:**
+- Query performance
+- Connection pooling
+- Database operations
+
+### Error Tracking
+
+Monitor exceptions and errors:
+- Exception types and counts
+- Stack traces
+- Error rate over time
+- Affected endpoints
+
+## Dashboard Views
+
+### Overview Page
+
+Provides a high-level summary:
+- Total requests
+- Average response time
+- Error rate
+- CPU and memory usage graphs
+
+### Endpoint Analysis
+
+Detailed view for each endpoint:
+
+**POST /predict:**
+- Prediction request volume
+- Processing time statistics
+- Success/error rates
+- Recent requests
+
+**POST /train:**
+- Training job frequency
+- Training duration
+- Success/failure tracking
+
+**GET /:**
+- Homepage access patterns
+- Load times
+
+### Outliers Detection
+
+Identify performance issues:
+- Unusually slow requests
+- Timeout events
+- Resource spikes
+
+### Profiler
+
+Detailed code profiling:
+- Function execution times
+- Call stack analysis
+- Performance bottlenecks
+
+## Configuration Options
+
+### Custom Configuration
+
+Create a `config.cfg` file for custom dashboard settings:
+
+```python
+# config.cfg
+[dashboard]
+APP_VERSION = 1.0
+GIT = https://github.com/your-repo
+CUSTOM_LINK = documentation:https://docs.example.com
+
+[authentication]
+enabled = True
+username = admin
+password = your-secure-password
+
+[database]
+database_name = flask_monitoringdashboard.db
+table_prefix = fmd
+
+[visualization]
+timezone = UTC
+colors = {}
+```
+
+### Loading Configuration
+
+Update `main.py` to load custom configuration:
+
+```python
+import flask_monitoringdashboard as dashboard
+
+app = Flask(__name__)
+dashboard.config.init_from(file='config.cfg')
+dashboard.bind(app)
+```
+
+### Security Configuration
+
+**Enable authentication:**
+```python
+dashboard.config.security.enabled = True
+```
+
+**Set custom credentials:**
+```python
+dashboard.config.security.username = 'admin'
+dashboard.config.security.password = 'secure-password-here'
+```
+
+**IP whitelist:**
+```python
+dashboard.config.security.ip_whitelist = ['192.168.1.1', '10.0.0.0/8']
+```
+
+## Database Management
+
+### Monitoring Database
+
+The dashboard uses SQLite by default:
+- **File:** `flask_monitoringdashboard.db`
+- **Location:** Project root directory
+- **Size:** Grows with collected metrics
+
+### Database Maintenance
+
+**View database size:**
+```bash
+ls -lh flask_monitoringdashboard.db
+```
+
+**Backup database:**
+```bash
+cp flask_monitoringdashboard.db flask_monitoringdashboard_backup_$(date +%Y%m%d).db
+```
+
+**Clear old data:**
+
+Use the dashboard UI to configure data retention or manually clear old records.
+
+## Performance Optimization
+
+### Sampling Rate
+
+Reduce overhead by sampling requests:
+
+```python
+dashboard.config.monitor_level = 1  # Monitor 10% of requests
+```
+
+Levels:
+- `0`: Monitor all requests (default)
+- `1`: Monitor 10% of requests
+- `2`: Monitor 1% of requests
+- `3`: Monitor 0.1% of requests
+
+### Disable Profiling
+
+For production with high traffic:
+
+```python
+dashboard.config.enable_profiler = False
+```
+
+## Monitoring Best Practices
+
+1. **Set up alerts:** Monitor for:
+   - Response time > 5 seconds
+   - Error rate > 5%
+   - CPU usage > 80%
+
+2. **Regular reviews:** Check dashboard weekly for:
+   - Performance trends
+   - Unusual patterns
+   - Error spikes
+
+3. **Backup monitoring data:** Regular backups of `flask_monitoringdashboard.db`
+
+4. **Secure access:** Use strong authentication in production
+
+5. **Resource monitoring:** Track dashboard's own resource usage
+
+## Troubleshooting
+
+### Dashboard not accessible
+
+**Check if dashboard is bound:**
+```python
+print(dashboard.config.blueprint_path)  # Should print '/dashboard'
+```
+
+**Verify routes:**
+```bash
+flask routes | grep dashboard
+```
+
+### High database size
+
+- Configure data retention policy
+- Archive old metrics
+- Consider using PostgreSQL for production
+
+### Performance impact
+
+- Reduce monitoring level
+- Disable profiling
+- Increase sampling interval
+
+## Next Steps
+
+- [Production setup guide](/deployment/setup)
+- [Deploy to Heroku](/deployment/heroku)
+- Configure alerting for critical metrics
+- Set up external monitoring (Datadog, New Relic)

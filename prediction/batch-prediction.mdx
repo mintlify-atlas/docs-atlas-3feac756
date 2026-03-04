@@ -1,0 +1,234 @@
+---
+title: Batch Prediction
+description: Processing batch files to generate fraud predictions
+---
+
+## Overview
+
+The batch prediction system processes CSV files from the `Prediction_Batch_files/` directory and generates fraud predictions for each record. The system uses cluster-specific models to improve prediction accuracy.
+
+## Batch File Processing
+
+### File Location
+
+Place prediction files in the `Prediction_Batch_files/` directory with the following naming convention:
+
+```
+fraudDetection_[DateStamp]_[TimeStamp].csv
+```
+
+**Example**: `fraudDetection_021119920_010222.csv`
+
+<Info>
+Files that don't match the naming convention will be moved to the Bad_Raw folder during validation.
+</Info>
+
+### Processing Pipeline
+
+The `prediction` class handles the complete batch prediction workflow:
+
+```python
+class prediction:
+    def __init__(self, path):
+        self.file_object = open("Prediction_Logs/Prediction_Log.txt", 'a+')
+        self.log_writer = logger.App_Logger()
+        self.pred_data_val = Prediction_Data_validation(path)
+
+    def predictionFromModel(self):
+        # Main prediction workflow
+```
+
+## How Predictions are Generated Per Cluster
+
+The system uses a cluster-based approach for improved accuracy:
+
+<Steps>
+  <Step title="Load KMeans Model">
+    The pre-trained KMeans clustering model is loaded from the models directory.
+    
+    ```python
+    file_loader = file_methods.File_Operation(self.file_object, self.log_writer)
+    kmeans = file_loader.load_model('KMeans')
+    ```
+  </Step>
+  
+  <Step title="Assign Clusters">
+    Each preprocessed record is assigned to a cluster.
+    
+    ```python
+    clusters = kmeans.predict(data)
+    data['clusters'] = clusters
+    clusters = data['clusters'].unique()
+    ```
+  </Step>
+  
+  <Step title="Iterate Through Clusters">
+    For each unique cluster in the dataset:
+    
+    ```python
+    predictions = []
+    for i in clusters:
+        cluster_data = data[data['clusters'] == i]
+        cluster_data = cluster_data.drop(['clusters'], axis=1)
+    ```
+  </Step>
+  
+  <Step title="Load Cluster-Specific Model">
+    Find and load the trained model for the specific cluster.
+    
+    ```python
+    model_name = file_loader.find_correct_model_file(i)
+    model = file_loader.load_model(model_name)
+    ```
+  </Step>
+  
+  <Step title="Generate Predictions">
+    Apply the model and encode results as Y/N.
+    
+    ```python
+    result = model.predict(cluster_data)
+    for res in result:
+        if res == 0:
+            predictions.append('N')
+        else:
+            predictions.append('Y')
+    ```
+  </Step>
+</Steps>
+
+## Complete Prediction Workflow
+
+Here's the complete `predictionFromModel` method from `predictFromModel.py:17-76`:
+
+```python
+def predictionFromModel(self):
+    try:
+        self.pred_data_val.deletePredictionFile()  # deletes existing prediction file
+        self.log_writer.log(self.file_object, 'Start of Prediction')
+        
+        # Load validated data
+        data_getter = data_loader_prediction.Data_Getter_Pred(self.file_object, self.log_writer)
+        data = data_getter.get_data()
+
+        # Preprocess data
+        preprocessor = preprocessing.Preprocessor(self.file_object, self.log_writer)
+        data = preprocessor.remove_columns(data,
+                                           ['policy_number', 'policy_bind_date', 'policy_state', 
+                                            'insured_zip', 'incident_location', 'incident_date', 
+                                            'incident_state', 'incident_city', 'insured_hobbies', 
+                                            'auto_make', 'auto_model', 'auto_year', 'age',
+                                            'total_claim_amount'])
+        
+        data.replace('?', np.NaN, inplace=True)
+
+        # Handle missing values
+        is_null_present, cols_with_missing_values = preprocessor.is_null_present(data)
+        if (is_null_present):
+            data = preprocessor.impute_missing_values(data, cols_with_missing_values)
+        
+        # Encode and scale
+        data = preprocessor.encode_categorical_columns(data)
+        data = preprocessor.scale_numerical_columns(data)
+
+        # Load clustering model
+        file_loader = file_methods.File_Operation(self.file_object, self.log_writer)
+        kmeans = file_loader.load_model('KMeans')
+
+        # Assign clusters and predict
+        clusters = kmeans.predict(data)
+        data['clusters'] = clusters
+        clusters = data['clusters'].unique()
+        
+        predictions = []
+        for i in clusters:
+            cluster_data = data[data['clusters'] == i]
+            cluster_data = cluster_data.drop(['clusters'], axis=1)
+            model_name = file_loader.find_correct_model_file(i)
+            model = file_loader.load_model(model_name)
+            result = model.predict(cluster_data)
+            
+            for res in result:
+                if res == 0:
+                    predictions.append('N')
+                else:
+                    predictions.append('Y')
+
+        # Save predictions
+        final = pd.DataFrame(list(zip(predictions)), columns=['Predictions'])
+        path = "Prediction_Output_File/Predictions.csv"
+        final.to_csv("Prediction_Output_File/Predictions.csv", header=True, mode='a+')
+        
+        self.log_writer.log(self.file_object, 'End of Prediction')
+    except Exception as ex:
+        self.log_writer.log(self.file_object, 
+                           'Error occured while running the prediction!! Error:: %s' % ex)
+        raise ex
+    return path
+```
+
+## Output File Location
+
+Predictions are saved to:
+
+```
+Prediction_Output_File/Predictions.csv
+```
+
+<Warning>
+The system automatically deletes any existing prediction file before generating new predictions to avoid confusion from previous runs.
+</Warning>
+
+## Data Preprocessing Steps
+
+Before prediction, the system performs several preprocessing steps:
+
+<AccordionGroup>
+  <Accordion title="Column Removal">
+    Removes columns that don't contribute to prediction:
+    - `policy_number`, `policy_bind_date`, `policy_state`
+    - `insured_zip`, `insured_hobbies`
+    - `incident_location`, `incident_date`, `incident_state`, `incident_city`
+    - `auto_make`, `auto_model`, `auto_year`
+    - `age`, `total_claim_amount`
+  </Accordion>
+  
+  <Accordion title="Missing Value Handling">
+    - Replaces '?' characters with NaN
+    - Detects columns with missing values
+    - Applies appropriate imputation strategies
+  </Accordion>
+  
+  <Accordion title="Feature Encoding">
+    Encodes categorical variables into numerical format for model compatibility.
+  </Accordion>
+  
+  <Accordion title="Feature Scaling">
+    Scales numerical features to standardize value ranges.
+  </Accordion>
+</AccordionGroup>
+
+## Logging
+
+All prediction activities are logged to:
+
+```
+Prediction_Logs/Prediction_Log.txt
+```
+
+Logs include:
+- Start and end of prediction process
+- Data loading status
+- Preprocessing steps
+- Model loading events
+- Any errors or exceptions
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prediction Overview" icon="compass" href="/prediction/overview">
+    Understand the complete prediction workflow
+  </Card>
+  <Card title="Output Format" icon="file-csv" href="/prediction/output">
+    Learn how to interpret prediction results
+  </Card>
+</CardGroup>

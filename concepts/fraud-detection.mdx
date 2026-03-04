@@ -1,0 +1,523 @@
+---
+title: 'Fraud Detection Methodology'
+description: 'Understanding insurance fraud indicators, features, and the ML approach'
+icon: 'shield-check'
+---
+
+## Insurance Fraud Overview
+
+Insurance fraud costs the industry billions annually. This system detects fraudulent claims by analyzing patterns in claim characteristics, policyholder information, and incident details.
+
+<Info>
+  The system uses a **clustering + classification** approach to handle heterogeneous claim types and improve detection accuracy across different customer segments.
+</Info>
+
+## Fraud Indicators
+
+The model learns to identify fraud based on these categories of indicators:
+
+### Policyholder Profile Indicators
+
+<CardGroup cols={2}>
+  <Card title="Customer Tenure" icon="calendar">
+    **Feature:** `months_as_customer`
+    
+    New customers may have different fraud patterns than long-term policyholders. Short tenure combined with high-value claims can indicate fraud.
+  </Card>
+  
+  <Card title="Education Level" icon="graduation-cap">
+    **Feature:** `insured_education_level`
+    
+    Encoded: JD(1), High School(2), College(3), Masters(4), Associate(5), MD(6), PhD(7)
+    
+    Correlates with claim patterns and fraud likelihood.
+  </Card>
+  
+  <Card title="Occupation" icon="briefcase">
+    **Feature:** `insured_occupation`
+    
+    One-hot encoded. Certain occupations may correlate with specific fraud schemes.
+  </Card>
+  
+  <Card title="Relationship Status" icon="users">
+    **Feature:** `insured_relationship`
+    
+    Family structure can influence claim behavior and fraud patterns.
+  </Card>
+</CardGroup>
+
+### Policy Characteristics
+
+<AccordionGroup>
+  <Accordion title="Coverage Limits (policy_csl)">
+    **Combined Single Limit** - Encoded as 1, 2.5, 5 for 100/300, 250/500, 500/1000
+    
+    Higher coverage limits combined with maximum claims can indicate staged fraud.
+  </Accordion>
+  
+  <Accordion title="Deductible (policy_deductable)">
+    Low deductibles with frequent claims may signal fraud, while high deductibles with maximum claims warrant scrutiny.
+  </Accordion>
+  
+  <Accordion title="Premium (policy_annual_premium)">
+    Relationship between premium paid and claims filed. Abnormally high claims relative to premium can indicate fraud.
+  </Accordion>
+  
+  <Accordion title="Umbrella Limit (umbrella_limit)">
+    Additional coverage amount. Can interact with other policy features to identify suspicious patterns.
+  </Accordion>
+</AccordionGroup>
+
+### Incident Characteristics
+
+<Tabs>
+  <Tab title="Incident Details">
+    **incident_type** - Type of incident (one-hot encoded)
+    - Single Vehicle Collision
+    - Multi-vehicle Collision  
+    - Vehicle Theft
+    - Parked Car
+    
+    **collision_type** - Nature of collision
+    - Front Collision
+    - Rear Collision
+    - Side Collision
+    
+    **incident_severity** - Damage level (1-4)
+    - Trivial Damage (1)
+    - Minor Damage (2)
+    - Major Damage (3)
+    - Total Loss (4)
+    
+    Mismatch between severity and claim amounts is a red flag.
+  </Tab>
+  
+  <Tab title="Timing & Location">
+    **incident_hour_of_the_day** - Hour when incident occurred (0-23)
+    
+    Certain hours may correlate with staged accidents (e.g., late night in isolated areas).
+    
+    **Note:** `incident_date`, `incident_state`, `incident_city`, `incident_location` are removed during preprocessing due to high cardinality and potential overfitting.
+  </Tab>
+  
+  <Tab title="Involvement Details">
+    **number_of_vehicles_involved** - Count of vehicles
+    
+    Multi-vehicle incidents require verification of all parties.
+    
+    **bodily_injuries** - Number of injuries reported
+    
+    **witnesses** - Number of witnesses
+    
+    Low witness count with high injury claims can indicate fraud.
+  </Tab>
+  
+  <Tab title="Response">
+    **authorities_contacted** - Which authority was called (one-hot encoded)
+    - Police
+    - Fire
+    - Ambulance
+    - None
+    
+    **police_report_available** - Binary (0=NO, 1=YES)
+    
+    Absence of police report for severe incidents is suspicious.
+    
+    **property_damage** - Binary (0=NO, 1=YES)
+    
+    Inconsistency with collision type raises flags.
+  </Tab>
+</Tabs>
+
+### Claim Financial Indicators
+
+```python
+# Financial features used in the model
+financial_features = [
+    'injury_claim',    # Amount claimed for injuries
+    'property_claim',  # Amount claimed for property damage
+    'vehicle_claim',   # Amount claimed for vehicle damage
+    'capital-gains',   # Policyholder capital gains
+    'capital-loss'     # Policyholder capital losses
+]
+```
+
+<Warning>
+  `total_claim_amount` is **removed** during preprocessing to prevent data leakage, as it's the sum of injury_claim + property_claim + vehicle_claim.
+</Warning>
+
+**Fraud Patterns:**
+- Maximum claims across all categories
+- Round number amounts (e.g., exactly $10,000)
+- Claims disproportionate to incident severity
+- Financial distress (high capital losses) combined with severe claims
+
+## Features Used for Detection
+
+After preprocessing, the model trains on approximately **35-40 features** (exact count depends on one-hot encoding cardinality):
+
+### Numerical Features (12)
+
+```python
+scaled_numerical_features = [
+    'months_as_customer',           # Tenure indicator
+    'policy_deductable',            # Risk threshold
+    'umbrella_limit',               # Additional coverage
+    'capital-gains',                # Financial status
+    'capital-loss',                 # Financial stress
+    'incident_hour_of_the_day',     # Temporal pattern
+    'number_of_vehicles_involved',  # Incident complexity
+    'bodily_injuries',              # Severity proxy
+    'witnesses',                    # Verification potential
+    'injury_claim',                 # Claim component
+    'property_claim',               # Claim component
+    'vehicle_claim'                 # Claim component
+]
+```
+
+All scaled using `StandardScaler` (mean=0, std=1)
+
+**Reference:** `data_preprocessing/preprocessing.py:170-174`
+
+### Encoded Categorical Features
+
+**Label Encoded (6):**
+- `policy_csl` (1, 2.5, 5)
+- `insured_education_level` (1-7)
+- `incident_severity` (1-4)
+- `insured_sex` (0-1)
+- `property_damage` (0-1)
+- `police_report_available` (0-1)
+
+**One-Hot Encoded (Variable):**
+- `insured_occupation` → ~10-15 features
+- `insured_relationship` → ~5 features
+- `incident_type` → ~3 features
+- `collision_type` → ~2 features
+- `authorities_contacted` → ~3 features
+
+**Reference:** `data_preprocessing/preprocessing.py:191-237`
+
+## Model Approach: Clustering + Classification
+
+The system uses a two-stage approach:
+
+### Stage 1: K-Means Clustering
+
+**Purpose:** Segment claims into homogeneous groups before classification
+
+**Algorithm:** K-Means with k-means++ initialization
+
+**Optimal Cluster Selection:**
+```python
+# Elbow method with automated knee detection
+wcss = []
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
+    kmeans.fit(X)  # Features only, no labels
+    wcss.append(kmeans.inertia_)
+
+# KneeLocator finds the elbow point
+kn = KneeLocator(range(1, 11), wcss, curve='convex', direction='decreasing')
+optimal_k = kn.knee
+```
+
+**Reference:** `data_preprocessing/clustering.py:19-47`
+
+<Tip>
+  **Why Clustering?** Insurance claims are heterogeneous. Clustering groups similar claims (e.g., minor vs. major incidents, different demographics) allowing specialized models per segment.
+</Tip>
+
+### Stage 2: Supervised Classification
+
+For each cluster, the system trains and compares two algorithms:
+
+<Tabs>
+  <Tab title="XGBoost">
+    **Algorithm:** Extreme Gradient Boosting
+    
+    **Hyperparameters Tuned:**
+    ```python
+    param_grid = {
+        'n_estimators': [100, 130],
+        'criterion': ['gini', 'entropy'],
+        'max_depth': range(8, 10, 1)
+    }
+    ```
+    
+    **Grid Search:** 5-fold cross-validation
+    
+    **Objective:** `binary:logistic` (fraud vs. non-fraud)
+    
+    **Advantages:**
+    - Handles non-linear relationships
+    - Built-in regularization
+    - Feature importance scores
+    - Robust to imbalanced data
+    
+    **Reference:** `best_model_finder/tuner.py:66-107`
+  </Tab>
+  
+  <Tab title="SVM (Support Vector Machine)">
+    **Algorithm:** Support Vector Classification
+    
+    **Hyperparameters Tuned:**
+    ```python
+    param_grid = {
+        'kernel': ['rbf', 'sigmoid'],
+        'C': [0.1, 0.5, 1.0],
+        'random_state': [0, 100, 200, 300]
+    }
+    ```
+    
+    **Grid Search:** 5-fold cross-validation
+    
+    **Advantages:**
+    - Effective in high-dimensional spaces
+    - Memory efficient (uses support vectors)
+    - Versatile kernels for non-linear boundaries
+    
+    **Reference:** `best_model_finder/tuner.py:20-64`
+  </Tab>
+</Tabs>
+
+### Model Selection Process
+
+```python
+def get_best_model(train_x, train_y, test_x, test_y):
+    # Train both models
+    xgboost = get_best_params_for_xgboost(train_x, train_y)
+    svm = get_best_params_for_svm(train_x, train_y)
+    
+    # Evaluate on test set
+    pred_xgb = xgboost.predict(test_x)
+    pred_svm = svm.predict(test_x)
+    
+    # Score using ROC-AUC (or accuracy if single class)
+    if len(test_y.unique()) == 1:
+        score_xgb = accuracy_score(test_y, pred_xgb)
+        score_svm = accuracy_score(test_y, pred_svm)
+    else:
+        score_xgb = roc_auc_score(test_y, pred_xgb)
+        score_svm = roc_auc_score(test_y, pred_svm)
+    
+    # Return best model
+    if score_xgb > score_svm:
+        return 'XGBoost', xgboost
+    else:
+        return 'SVM', svm
+```
+
+**Reference:** `best_model_finder/tuner.py:117-165`
+
+<Note>
+  **Evaluation Metric:** ROC-AUC is used as the primary metric because it's robust to class imbalance (fraud cases are typically rare). Accuracy is used as a fallback when only one class is present in the test set.
+</Note>
+
+## Training Workflow per Cluster
+
+<Steps>
+  <Step title="Cluster Assignment">
+    After K-Means clustering, each data point is assigned a cluster ID (0, 1, 2, etc.)
+  </Step>
+  
+  <Step title="Cluster Isolation">
+    For cluster `i`, extract all rows: `cluster_data = X[X['Cluster'] == i]`
+  </Step>
+  
+  <Step title="Feature-Label Split">
+    ```python
+    cluster_features = cluster_data.drop(['Labels', 'Cluster'], axis=1)
+    cluster_label = cluster_data['Labels']  # fraud_reported: 0 or 1
+    ```
+  </Step>
+  
+  <Step title="Train-Test Split">
+    ```python
+    x_train, x_test, y_train, y_test = train_test_split(
+        cluster_features, cluster_label, 
+        test_size=1/3, random_state=355
+    )
+    ```
+    67% training, 33% testing
+  </Step>
+  
+  <Step title="Scaling">
+    Apply `StandardScaler` to numerical features in both train and test sets
+  </Step>
+  
+  <Step title="Model Training & Selection">
+    Train XGBoost and SVM, select best based on AUC score
+  </Step>
+  
+  <Step title="Model Persistence">
+    Save best model as `{ModelName}{ClusterID}` (e.g., `XGBoost0`, `SVM1`)
+  </Step>
+</Steps>
+
+**Reference:** `trainingModel.py:72-93`
+
+## Prediction Interpretation
+
+The system outputs binary fraud predictions:
+
+### Prediction Process
+
+```python
+for i in clusters:
+    cluster_data = data[data['clusters'] == i]
+    cluster_data = cluster_data.drop(['clusters'], axis=1)
+    
+    # Load cluster-specific best model
+    model_name = file_loader.find_correct_model_file(i)
+    model = file_loader.load_model(model_name)
+    
+    # Predict
+    result = model.predict(cluster_data)
+    
+    # Map to Y/N
+    for res in result:
+        if res == 0:
+            predictions.append('N')  # Not Fraud
+        else:
+            predictions.append('Y')  # Fraud
+```
+
+**Reference:** `predictFromModel.py:57-67`
+
+### Output Format
+
+**File:** `Prediction_Output_File/Predictions.csv`
+
+```csv
+Predictions
+N
+Y
+N
+N
+Y
+```
+
+- **N** - Claim predicted as **NOT FRAUDULENT** (model output = 0)
+- **Y** - Claim predicted as **FRAUDULENT** (model output = 1)
+
+### Interpretation Guidelines
+
+<AccordionGroup>
+  <Accordion title="Y - Fraudulent Prediction">
+    **Action Required:**
+    - Flag for manual investigation
+    - Request additional documentation
+    - Verify witness statements
+    - Check for previous fraud history
+    - Validate claim amounts against incident severity
+    
+    **Not Automatic Rejection:** Human review required to confirm fraud.
+  </Accordion>
+  
+  <Accordion title="N - Non-Fraudulent Prediction">
+    **Processing:**
+    - Proceed with standard claim processing
+    - May still undergo random audits
+    - Not guaranteed legitimate (false negatives possible)
+    
+    **Risk Tiering:** Consider implementing confidence scores for borderline cases.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  **Model Limitations:**
+  - Predictions are probabilistic, not definitive
+  - False positives/negatives will occur
+  - Novel fraud schemes may not be detected
+  - Model should be retrained periodically with new data
+</Warning>
+
+## Handling Class Imbalance
+
+Fraud cases are typically rare (often less than 10% of claims). The system addresses this:
+
+### During Training (Optional)
+
+The `Preprocessor` class includes a `handle_imbalanced_dataset()` method:
+
+```python
+from imblearn.over_sampling import RandomOverSampler
+
+rdsmple = RandomOverSampler()
+x_sampled, y_sampled = rdsmple.fit_sample(x, y)
+```
+
+**Reference:** `data_preprocessing/preprocessing.py:239-266`
+
+<Note>
+  This method is defined but **not currently used** in the main training pipeline. It's available for future implementation if class imbalance becomes problematic.
+</Note>
+
+### Built-in Robustness
+
+- **XGBoost:** Inherently handles imbalance through weighted loss functions
+- **ROC-AUC Metric:** Robust to class imbalance, evaluates across all thresholds
+- **Clustering:** Naturally segments data, potentially creating more balanced cluster-specific datasets
+
+## Model Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Cluster-Specific Models" icon="bullseye">
+    Each cluster gets a specialized model, improving accuracy for heterogeneous claims compared to single global model.
+  </Card>
+  
+  <Card title="Hyperparameter Tuning" icon="sliders">
+    GridSearchCV with 5-fold CV ensures robust parameter selection and reduces overfitting.
+  </Card>
+  
+  <Card title="Algorithm Diversity" icon="shuffle">
+    Comparing XGBoost (tree-based) vs SVM (kernel-based) increases likelihood of finding optimal approach per cluster.
+  </Card>
+  
+  <Card title="Automated Selection" icon="robot">
+    Best model per cluster is selected automatically based on test set performance, no manual intervention needed.
+  </Card>
+</CardGroup>
+
+## Fraud Detection Best Practices
+
+<Tip>
+  **Model Monitoring:**
+  - Track prediction distribution (% flagged as fraud)
+  - Monitor false positive/negative rates via claim audits
+  - Retrain quarterly or when fraud patterns shift
+  - Log feature importance to understand decision factors
+</Tip>
+
+<Tip>
+  **Human-in-the-Loop:**
+  - Use predictions as decision support, not automatic rejection
+  - Maintain investigation team for flagged claims
+  - Collect feedback to improve model over time
+  - Document model limitations for compliance
+</Tip>
+
+<Tip>
+  **Continuous Improvement:**
+  - Incorporate new fraud schemes into training data
+  - A/B test model versions before deployment
+  - Consider ensemble methods combining multiple models
+  - Add explainability tools (SHAP, LIME) for transparency
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="System Overview" icon="compass" href="/concepts/overview">
+    Review the high-level system workflow and use cases
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore the technical implementation and module organization
+  </Card>
+  
+  <Card title="Data Pipeline" icon="pipe" href="/concepts/data-pipeline">
+    Deep dive into data preprocessing and validation
+  </Card>
+</CardGroup>

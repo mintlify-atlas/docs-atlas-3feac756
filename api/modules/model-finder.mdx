@@ -1,0 +1,430 @@
+---
+title: 'Model_Finder'
+description: 'Hyperparameter tuning and model selection module'
+icon: 'magnifying-glass-chart'
+---
+
+## Overview
+
+The `Model_Finder` class performs hyperparameter tuning using GridSearchCV and selects the best performing model between SVM and XGBoost based on AUC score or accuracy.
+
+## Class: Model_Finder
+
+**Location:** `source/best_model_finder/tuner.py`
+
+**Version:** 1.0
+
+### Constructor
+
+```python
+Model_Finder(file_object, logger_object)
+```
+
+<ParamField path="file_object" type="File" required>
+  File object for logging operations
+</ParamField>
+
+<ParamField path="logger_object" type="Logger" required>
+  Logger instance for tracking model training
+</ParamField>
+
+**Initialized Models:**
+
+```python
+self.sv_classifier = SVC()
+self.xgb = XGBClassifier(objective='binary:logistic', n_jobs=-1)
+```
+
+---
+
+## Methods
+
+### get_best_params_for_svm()
+
+Performs hyperparameter tuning for Support Vector Machine classifier using GridSearchCV.
+
+```python
+get_best_params_for_svm(train_x, train_y)
+```
+
+<ParamField path="train_x" type="pandas.DataFrame" required>
+  Training features
+</ParamField>
+
+<ParamField path="train_y" type="pandas.Series" required>
+  Training labels
+</ParamField>
+
+<ResponseField name="return" type="SVC">
+  Trained SVM classifier with optimal hyperparameters
+</ResponseField>
+
+**Hyperparameter Grid:**
+
+```python
+param_grid = {
+    "kernel": ['rbf', 'sigmoid'],
+    "C": [0.1, 0.5, 1.0],
+    "random_state": [0, 100, 200, 300]
+}
+```
+
+<ParamField path="kernel" type="str">
+  SVM kernel type - tests RBF and sigmoid
+</ParamField>
+
+<ParamField path="C" type="float">
+  Regularization parameter - controls margin hardness
+</ParamField>
+
+<ParamField path="random_state" type="int">
+  Random seed for reproducibility
+</ParamField>
+
+**Example Usage:**
+
+```python
+from best_model_finder.tuner import Model_Finder
+
+model_finder = Model_Finder(file_object, logger_object)
+svm_model = model_finder.get_best_params_for_svm(X_train, Y_train)
+
+print(f"Best kernel: {svm_model.kernel}")
+print(f"Best C: {svm_model.C}")
+```
+
+**Implementation:**
+
+```python
+self.param_grid = {
+    "kernel": ['rbf', 'sigmoid'],
+    "C": [0.1, 0.5, 1.0],
+    "random_state": [0, 100, 200, 300]
+}
+
+# Create GridSearchCV object
+self.grid = GridSearchCV(
+    estimator=self.sv_classifier,
+    param_grid=self.param_grid,
+    cv=5,
+    verbose=3
+)
+
+# Find best parameters
+self.grid.fit(train_x, train_y)
+
+# Extract best parameters
+self.kernel = self.grid.best_params_['kernel']
+self.C = self.grid.best_params_['C']
+self.random_state = self.grid.best_params_['random_state']
+
+# Create and train model with best parameters
+self.sv_classifier = SVC(
+    kernel=self.kernel,
+    C=self.C,
+    random_state=self.random_state
+)
+self.sv_classifier.fit(train_x, train_y)
+
+return self.sv_classifier
+```
+
+<Note>
+  GridSearchCV uses 5-fold cross-validation (cv=5) to evaluate each parameter combination
+</Note>
+
+---
+
+### get_best_params_for_xgboost()
+
+Performs hyperparameter tuning for XGBoost classifier using GridSearchCV.
+
+```python
+get_best_params_for_xgboost(train_x, train_y)
+```
+
+<ParamField path="train_x" type="pandas.DataFrame" required>
+  Training features
+</ParamField>
+
+<ParamField path="train_y" type="pandas.Series" required>
+  Training labels
+</ParamField>
+
+<ResponseField name="return" type="XGBClassifier">
+  Trained XGBoost classifier with optimal hyperparameters
+</ResponseField>
+
+**Hyperparameter Grid:**
+
+```python
+param_grid_xgboost = {
+    "n_estimators": [100, 130],
+    "criterion": ['gini', 'entropy'],
+    "max_depth": range(8, 10, 1)  # [8, 9]
+}
+```
+
+<ParamField path="n_estimators" type="int">
+  Number of boosting rounds/trees
+</ParamField>
+
+<ParamField path="criterion" type="str">
+  Split quality measurement - gini impurity or information gain
+</ParamField>
+
+<ParamField path="max_depth" type="int">
+  Maximum tree depth - controls model complexity
+</ParamField>
+
+**Example Usage:**
+
+```python
+model_finder = Model_Finder(file_object, logger_object)
+xgb_model = model_finder.get_best_params_for_xgboost(X_train, Y_train)
+
+print(f"Best n_estimators: {xgb_model.n_estimators}")
+print(f"Best max_depth: {xgb_model.max_depth}")
+print(f"Best criterion: {xgb_model.criterion}")
+```
+
+**Implementation:**
+
+```python
+self.param_grid_xgboost = {
+    "n_estimators": [100, 130],
+    "criterion": ['gini', 'entropy'],
+    "max_depth": range(8, 10, 1)
+}
+
+# Create GridSearchCV object
+self.grid = GridSearchCV(
+    XGBClassifier(objective='binary:logistic'),
+    self.param_grid_xgboost,
+    verbose=3,
+    cv=5
+)
+
+# Find best parameters
+self.grid.fit(train_x, train_y)
+
+# Extract best parameters
+self.criterion = self.grid.best_params_['criterion']
+self.max_depth = self.grid.best_params_['max_depth']
+self.n_estimators = self.grid.best_params_['n_estimators']
+
+# Create and train model with best parameters
+self.xgb = XGBClassifier(
+    criterion=self.criterion,
+    max_depth=self.max_depth,
+    n_estimators=self.n_estimators,
+    n_jobs=-1
+)
+self.xgb.fit(train_x, train_y)
+
+return self.xgb
+```
+
+<Tip>
+  `n_jobs=-1` utilizes all CPU cores for parallel processing
+</Tip>
+
+---
+
+### get_best_model()
+
+Compares SVM and XGBoost models and returns the best performer based on AUC score or accuracy.
+
+```python
+get_best_model(train_x, train_y, test_x, test_y)
+```
+
+<ParamField path="train_x" type="pandas.DataFrame" required>
+  Training features
+</ParamField>
+
+<ParamField path="train_y" type="pandas.Series" required>
+  Training labels
+</ParamField>
+
+<ParamField path="test_x" type="pandas.DataFrame" required>
+  Testing features
+</ParamField>
+
+<ParamField path="test_y" type="pandas.Series" required>
+  Testing labels
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  Tuple containing (model_name: str, model_object)
+  - model_name: Either 'XGBoost' or 'SVM'
+  - model_object: The trained model with best performance
+</ResponseField>
+
+**Example Usage:**
+
+```python
+model_finder = Model_Finder(file_object, logger_object)
+
+# Find and return the best model
+best_name, best_model = model_finder.get_best_model(
+    X_train, Y_train,
+    X_test, Y_test
+)
+
+print(f"Best model: {best_name}")
+
+# Use the best model for predictions
+predictions = best_model.predict(X_new)
+```
+
+**Implementation:**
+
+```python
+try:
+    # Train XGBoost
+    self.xgboost = self.get_best_params_for_xgboost(train_x, train_y)
+    self.prediction_xgboost = self.xgboost.predict(test_x)
+    
+    # Calculate XGBoost score
+    if len(test_y.unique()) == 1:
+        # Use accuracy if only one label present
+        self.xgboost_score = accuracy_score(test_y, self.prediction_xgboost)
+        self.logger_object.log(self.file_object, 
+            'Accuracy for XGBoost:' + str(self.xgboost_score))
+    else:
+        # Use AUC for multi-class
+        self.xgboost_score = roc_auc_score(test_y, self.prediction_xgboost)
+        self.logger_object.log(self.file_object, 
+            'AUC for XGBoost:' + str(self.xgboost_score))
+    
+    # Train SVM
+    self.svm = self.get_best_params_for_svm(train_x, train_y)
+    self.prediction_svm = self.svm.predict(test_x)
+    
+    # Calculate SVM score
+    if len(test_y.unique()) == 1:
+        self.svm_score = accuracy_score(test_y, self.prediction_svm)
+        self.logger_object.log(self.file_object, 
+            'Accuracy for SVM:' + str(self.svm_score))
+    else:
+        self.svm_score = roc_auc_score(test_y, self.prediction_svm)
+        self.logger_object.log(self.file_object, 
+            'AUC for SVM:' + str(self.svm_score))
+    
+    # Compare and return best model
+    if self.svm_score < self.xgboost_score:
+        return 'XGBoost', self.xgboost
+    else:
+        return 'SVM', self.sv_classifier
+        
+except Exception as e:
+    raise Exception()
+```
+
+**Evaluation Metrics:**
+
+- **AUC (Area Under ROC Curve):** Primary metric for multi-class scenarios
+- **Accuracy:** Fallback metric when only one label is present in test set
+
+<Warning>
+  The method trains both models from scratch, which can be computationally expensive
+</Warning>
+
+---
+
+## Complete Model Selection Pipeline
+
+Here's a typical workflow:
+
+```python
+from best_model_finder.tuner import Model_Finder
+from sklearn.model_selection import train_test_split
+
+# Initialize model finder
+model_finder = Model_Finder(file_object, logger_object)
+
+# Split data
+X_train, X_test, Y_train, Y_test = train_test_split(
+    X, Y, test_size=0.2, random_state=42
+)
+
+# Method 1: Get best overall model
+best_name, best_model = model_finder.get_best_model(
+    X_train, Y_train, X_test, Y_test
+)
+print(f"Selected model: {best_name}")
+
+# Method 2: Train specific models
+svm_model = model_finder.get_best_params_for_svm(X_train, Y_train)
+xgb_model = model_finder.get_best_params_for_xgboost(X_train, Y_train)
+```
+
+---
+
+## Hyperparameter Tuning Strategy
+
+### Grid Search Coverage
+
+**SVM:** 2 × 3 × 4 = 24 combinations with 5-fold CV = 120 model fits
+
+**XGBoost:** 2 × 2 × 2 = 8 combinations with 5-fold CV = 40 model fits
+
+### Cross-Validation
+
+Both methods use 5-fold cross-validation:
+
+1. Data split into 5 folds
+2. Each combination trained 5 times
+3. Average performance determines best params
+4. Reduces overfitting risk
+
+---
+
+## Model Comparison
+
+<CardGroup cols={2}>
+  <Card title="SVM" icon="chart-line">
+    **Strengths:**
+    - Effective in high-dimensional spaces
+    - Memory efficient
+    - Versatile kernel functions
+    
+    **Best for:**
+    - Clear margin of separation
+    - More features than samples
+  </Card>
+  
+  <Card title="XGBoost" icon="bolt">
+    **Strengths:**
+    - Handles missing values
+    - Built-in regularization
+    - Parallel processing
+    
+    **Best for:**
+    - Complex non-linear patterns
+    - Large datasets
+    - Feature importance analysis
+  </Card>
+</CardGroup>
+
+---
+
+## Dependencies
+
+```python
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
+from xgboost import XGBClassifier
+from sklearn.metrics import roc_auc_score, accuracy_score
+```
+
+## Performance Tips
+
+<Tip>
+  For faster experimentation:
+  - Reduce cv parameter (e.g., cv=3)
+  - Use RandomizedSearchCV instead of GridSearchCV
+  - Reduce parameter grid size
+  - Use early stopping for XGBoost
+</Tip>

@@ -1,0 +1,400 @@
+---
+title: 'Data Loader'
+description: 'Data ingestion modules for training and prediction'
+icon: 'database'
+---
+
+## Overview
+
+The data loader modules provide simple interfaces for loading preprocessed data from CSV files for both training and prediction workflows.
+
+---
+
+## Training Data Loader
+
+### Class: Data_Getter
+
+**Location:** `source/data_ingestion/data_loader.py`
+
+**Version:** 1.0
+
+**Purpose:** Loads training data from the database export for model training.
+
+#### Constructor
+
+```python
+Data_Getter(file_object, logger_object)
+```
+
+<ParamField path="file_object" type="File" required>
+  File object for logging operations
+</ParamField>
+
+<ParamField path="logger_object" type="Logger" required>
+  Logger instance for tracking data loading
+</ParamField>
+
+**Configuration:**
+
+```python
+self.training_file = 'Training_FileFromDB/InputFile.csv'
+```
+
+#### Method: get_data()
+
+Reads training data from the configured CSV file path.
+
+```python
+get_data()
+```
+
+<ResponseField name="return" type="pandas.DataFrame">
+  Complete training dataset including features and labels
+</ResponseField>
+
+**Example Usage:**
+
+```python
+from data_ingestion.data_loader import Data_Getter
+
+# Initialize data getter
+data_getter = Data_Getter(file_object, logger_object)
+
+# Load training data
+training_data = data_getter.get_data()
+
+print(f"Loaded {len(training_data)} training samples")
+print(f"Features: {training_data.columns.tolist()}")
+```
+
+**Implementation:**
+
+```python
+def get_data(self):
+    self.logger_object.log(
+        self.file_object,
+        'Entered the get_data method of the Data_Getter class'
+    )
+    try:
+        self.data = pd.read_csv(self.training_file)
+        self.logger_object.log(
+            self.file_object,
+            'Data Load Successful.Exited the get_data method of the Data_Getter class'
+        )
+        return self.data
+    except Exception as e:
+        self.logger_object.log(
+            self.file_object,
+            'Exception occured in get_data method of the Data_Getter class. Exception message: ' + str(e)
+        )
+        self.logger_object.log(
+            self.file_object,
+            'Data Load Unsuccessful.Exited the get_data method of the Data_Getter class'
+        )
+        raise Exception()
+```
+
+**Data Source:**
+
+- **Path:** `Training_FileFromDB/InputFile.csv`
+- **Format:** CSV with headers
+- **Content:** Raw training data exported from database
+
+<Note>
+  The file path `Training_FileFromDB/InputFile.csv` should contain data exported from the database validation step
+</Note>
+
+---
+
+## Prediction Data Loader
+
+### Class: Data_Getter_Pred
+
+**Location:** `source/data_ingestion/data_loader_prediction.py`
+
+**Version:** 1.0
+
+**Purpose:** Loads new data for making fraud predictions using trained models.
+
+#### Constructor
+
+```python
+Data_Getter_Pred(file_object, logger_object)
+```
+
+<ParamField path="file_object" type="File" required>
+  File object for logging operations
+</ParamField>
+
+<ParamField path="logger_object" type="Logger" required>
+  Logger instance for tracking data loading
+</ParamField>
+
+**Configuration:**
+
+```python
+self.prediction_file = 'Prediction_FileFromDB/InputFile.csv'
+```
+
+#### Method: get_data()
+
+Reads prediction data from the configured CSV file path.
+
+```python
+get_data()
+```
+
+<ResponseField name="return" type="pandas.DataFrame">
+  Prediction dataset with features (no labels)
+</ResponseField>
+
+**Example Usage:**
+
+```python
+from data_ingestion.data_loader_prediction import Data_Getter_Pred
+
+# Initialize prediction data getter
+data_getter = Data_Getter_Pred(file_object, logger_object)
+
+# Load prediction data
+prediction_data = data_getter.get_data()
+
+print(f"Loaded {len(prediction_data)} samples for prediction")
+print(f"Features: {prediction_data.columns.tolist()}")
+```
+
+**Implementation:**
+
+```python
+def get_data(self):
+    self.logger_object.log(
+        self.file_object,
+        'Entered the get_data method of the Data_Getter class'
+    )
+    try:
+        self.data = pd.read_csv(self.prediction_file)
+        self.logger_object.log(
+            self.file_object,
+            'Data Load Successful.Exited the get_data method of the Data_Getter class'
+        )
+        return self.data
+    except Exception as e:
+        self.logger_object.log(
+            self.file_object,
+            'Exception occured in get_data method of the Data_Getter class. Exception message: ' + str(e)
+        )
+        self.logger_object.log(
+            self.file_object,
+            'Data Load Unsuccessful.Exited the get_data method of the Data_Getter class'
+        )
+        raise Exception()
+```
+
+**Data Source:**
+
+- **Path:** `Prediction_FileFromDB/InputFile.csv`
+- **Format:** CSV with headers
+- **Content:** New data for prediction (without labels)
+
+<Warning>
+  Prediction data should have the same feature structure as training data, but without the target label column
+</Warning>
+
+---
+
+## Complete Data Loading Workflow
+
+### Training Pipeline
+
+```python
+from data_ingestion.data_loader import Data_Getter
+from application_logging.logger import App_Logger
+
+# Initialize logging
+file_object = open("Training_Logs/DataLoadLog.txt", 'a+')
+logger = App_Logger()
+
+try:
+    # Load training data
+    data_getter = Data_Getter(file_object, logger)
+    data = data_getter.get_data()
+    
+    print(f"Successfully loaded {len(data)} training records")
+    
+    # Proceed with preprocessing
+    # ...
+    
+except Exception as e:
+    print(f"Data loading failed: {str(e)}")
+    
+finally:
+    file_object.close()
+```
+
+### Prediction Pipeline
+
+```python
+from data_ingestion.data_loader_prediction import Data_Getter_Pred
+from application_logging.logger import App_Logger
+
+# Initialize logging
+file_object = open("Prediction_Logs/DataLoadLog.txt", 'a+')
+logger = App_Logger()
+
+try:
+    # Load prediction data
+    data_getter = Data_Getter_Pred(file_object, logger)
+    data = data_getter.get_data()
+    
+    print(f"Successfully loaded {len(data)} records for prediction")
+    
+    # Proceed with preprocessing and prediction
+    # ...
+    
+except Exception as e:
+    print(f"Data loading failed: {str(e)}")
+    
+finally:
+    file_object.close()
+```
+
+---
+
+## Database Integration
+
+The data loaders expect CSV files exported from database validation:
+
+### Training Data Export
+
+```python
+# Pseudo-code for database export process
+
+1. Validate data schema in database
+2. Export validated training records to CSV
+3. Save to: Training_FileFromDB/InputFile.csv
+4. Data_Getter loads this file for training
+```
+
+### Prediction Data Export
+
+```python
+# Pseudo-code for prediction data export
+
+1. Receive new data via API/batch upload
+2. Validate data schema matches training format
+3. Export to: Prediction_FileFromDB/InputFile.csv
+4. Data_Getter_Pred loads this file for predictions
+```
+
+---
+
+## Data Expectations
+
+### Training Data Format
+
+**Required Columns:**
+
+- All feature columns from fraud detection schema
+- Target column: `fraud_reported` (values: 'Y' or 'N')
+
+**Example Structure:**
+
+```csv
+months_as_customer,policy_deductable,policy_csl,insured_sex,fraud_reported
+328,1000,250/500,MALE,N
+180,2000,100/300,FEMALE,Y
+...
+```
+
+### Prediction Data Format
+
+**Required Columns:**
+
+- All feature columns matching training data
+- NO target column (fraud_reported should be absent)
+
+**Example Structure:**
+
+```csv
+months_as_customer,policy_deductable,policy_csl,insured_sex
+425,1500,250/500,MALE
+92,2000,500/1000,FEMALE
+...
+```
+
+<Tip>
+  Ensure prediction data has identical feature names and order as training data to avoid preprocessing errors
+</Tip>
+
+---
+
+## Error Handling
+
+Both classes handle common loading errors:
+
+**FileNotFoundError:**
+```python
+# Raised when CSV file doesn't exist at specified path
+Exception: Data Load Unsuccessful
+```
+
+**Permission Errors:**
+```python
+# Raised when file cannot be read
+Exception: Data Load Unsuccessful
+```
+
+**Parsing Errors:**
+```python
+# Raised for invalid CSV format
+Exception: Data Load Unsuccessful
+```
+
+All exceptions are logged with details before re-raising.
+
+---
+
+## Logging
+
+Both classes provide detailed logging:
+
+**Success Log:**
+```
+Entered the get_data method of the Data_Getter class
+Data Load Successful.Exited the get_data method of the Data_Getter class
+```
+
+**Failure Log:**
+```
+Entered the get_data method of the Data_Getter class
+Exception occured in get_data method of the Data_Getter class. Exception message: [error details]
+Data Load Unsuccessful.Exited the get_data method of the Data_Getter class
+```
+
+---
+
+## Dependencies
+
+```python
+import pandas as pd
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="File Organization" icon="folder">
+    Keep training and prediction files in separate directories
+  </Card>
+  
+  <Card title="Data Validation" icon="check">
+    Validate CSV schema before loading to catch issues early
+  </Card>
+  
+  <Card title="Logging" icon="file-lines">
+    Always initialize logger before creating data getter instances
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Wrap data loading in try-except blocks for graceful failure
+  </Card>
+</CardGroup>

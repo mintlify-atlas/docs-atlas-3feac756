@@ -1,0 +1,169 @@
+---
+title: 'POST /train'
+description: 'Train a fraud detection model with new data'
+---
+
+## Endpoint
+
+```
+POST /train
+```
+
+Trains a new fraud detection model using training data from the specified folder path. This endpoint triggers the complete training workflow including data validation, preprocessing, and model training.
+
+## Request Body
+
+The request must be sent as JSON with the following parameter:
+
+<ParamField body="folderPath" type="string" required>
+  The file system path to the folder containing training data files. This folder should contain properly formatted CSV files with transaction data for model training.
+</ParamField>
+
+### Request Format
+
+```json
+{
+  "folderPath": "/path/to/training/data"
+}
+```
+
+## Training Workflow
+
+When the `/train` endpoint is called, the following process is executed:
+
+1. **Validation** - The `train_validation` object validates the training data structure and format
+2. **Data Processing** - Training data is validated and inserted into the database
+3. **Model Training** - The `trainModel` object trains the fraud detection model using the validated data
+
+```python
+train_valObj = train_validation(path)
+train_valObj.train_validation()
+
+trainModelObj = trainModel()
+trainModelObj.trainingModel()
+```
+
+## Response
+
+<ResponseField name="success" type="string">
+  Returns a success message when training completes successfully.
+</ResponseField>
+
+### Success Response
+
+```
+Training successfull!!
+```
+
+### Error Responses
+
+<ResponseField name="error" type="string">
+  Returns an error message if training fails.
+</ResponseField>
+
+Possible error responses:
+
+```
+Error Occurred! <class 'ValueError'>
+Error Occurred! <class 'KeyError'>
+Error Occurred! {exception_message}
+```
+
+## Example Request
+
+### cURL
+
+```bash
+curl -X POST http://127.0.0.1:5001/train \
+  -H "Content-Type: application/json" \
+  -d '{
+    "folderPath": "/home/user/fraud_detection/training_data"
+  }'
+```
+
+### Python (requests)
+
+```python
+import requests
+
+url = "http://127.0.0.1:5001/train"
+payload = {
+    "folderPath": "/home/user/fraud_detection/training_data"
+}
+
+response = requests.post(url, json=payload)
+print(response.text)
+```
+
+### JavaScript (fetch)
+
+```javascript
+fetch('http://127.0.0.1:5001/train', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    folderPath: '/home/user/fraud_detection/training_data'
+  })
+})
+.then(response => response.text())
+.then(data => console.log(data));
+```
+
+## Error Handling
+
+The endpoint handles the following error cases:
+
+<AccordionGroup>
+  <Accordion title="ValueError">
+    Raised when the provided folder path or data format is invalid.
+    
+    ```
+    Error Occurred! <class 'ValueError'>
+    ```
+  </Accordion>
+  
+  <Accordion title="KeyError">
+    Raised when the required `folderPath` parameter is missing from the request body.
+    
+    ```
+    Error Occurred! <class 'KeyError'>
+    ```
+  </Accordion>
+  
+  <Accordion title="General Exception">
+    Catches any other exceptions during the training process and returns the specific error message.
+    
+    ```
+    Error Occurred! {specific_error_message}
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Implementation Details
+
+The endpoint implementation from `main.py:64-92`:
+
+```python
+@app.route("/train", methods=['POST'])
+@cross_origin()
+def trainRouteClient():
+    try:
+        if request.json['folderPath'] is not None:
+            path = request.json['folderPath']
+            train_valObj = train_validation(path)
+            train_valObj.train_validation()
+            
+            trainModelObj = trainModel()
+            trainModelObj.trainingModel()
+
+    except ValueError:
+        return Response("Error Occurred! %s" % ValueError)
+    except KeyError:
+        return Response("Error Occurred! %s" % KeyError)
+    except Exception as e:
+        return Response("Error Occurred! %s" % e)
+        
+    return Response("Training successfull!!")
+```

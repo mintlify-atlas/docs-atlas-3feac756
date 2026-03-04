@@ -1,0 +1,307 @@
+---
+title: Prediction Data Validation
+description: Schema validation and data quality checks for prediction files
+---
+
+## Overview
+
+The `Prediction_Data_validation` class handles all validation for raw prediction data, ensuring files meet schema requirements before processing. Invalid files are automatically separated for review.
+
+## Schema Validation
+
+Validation is based on the prediction schema defined in `schema_prediction.json`:
+
+```json
+{
+  "SampleFileName": "fraudDetection_021119920_010222.csv",
+  "LengthOfDateStampInFile": 9,
+  "LengthOfTimeStampInFile": 6,
+  "NumberofColumns": 38,
+  "ColName": {
+    "months_as_customer": "Integer",
+    "age": "Integer",
+    "policy_number": "Integer",
+    // ... 35 more columns
+  }
+}
+```
+
+### Schema Extraction
+
+The `valuesFromSchema` method extracts validation parameters from `predictionDataValidation.py:30-77`:
+
+```python
+def valuesFromSchema(self):
+    """
+    Method Name: valuesFromSchema
+    Description: This method extracts all the relevant information from the 
+                 pre-defined "Schema" file.
+    Output: LengthOfDateStampInFile, LengthOfTimeStampInFile, 
+            column_names, Number of Columns
+    On Failure: Raise ValueError, KeyError, Exception
+    """
+    try:
+        with open(self.schema_path, 'r') as f:
+            dic = json.load(f)
+            f.close()
+        
+        pattern = dic['SampleFileName']
+        LengthOfDateStampInFile = dic['LengthOfDateStampInFile']
+        LengthOfTimeStampInFile = dic['LengthOfTimeStampInFile']
+        column_names = dic['ColName']
+        NumberofColumns = dic['NumberofColumns']
+
+        file = open("Training_Logs/valuesfromSchemaValidationLog.txt", 'a+')
+        message = ("LengthOfDateStampInFile:: %s" % LengthOfDateStampInFile + 
+                   "\t" + "LengthOfTimeStampInFile:: %s" % LengthOfTimeStampInFile + 
+                   "\t " + "NumberofColumns:: %s" % NumberofColumns + "\n")
+        self.logger.log(file, message)
+        file.close()
+
+    except ValueError:
+        file = open("Prediction_Logs/valuesfromSchemaValidationLog.txt", 'a+')
+        self.logger.log(file, "ValueError:Value not found inside schema_training.json")
+        file.close()
+        raise ValueError
+
+    except KeyError:
+        file = open("Prediction_Logs/valuesfromSchemaValidationLog.txt", 'a+')
+        self.logger.log(file, "KeyError:Key value error incorrect key passed")
+        file.close()
+        raise KeyError
+
+    except Exception as e:
+        file = open("Prediction_Logs/valuesfromSchemaValidationLog.txt", 'a+')
+        self.logger.log(file, str(e))
+        file.close()
+        raise e
+
+    return LengthOfDateStampInFile, LengthOfTimeStampInFile, column_names, NumberofColumns
+```
+
+## File Format Requirements
+
+<CardGroup cols={2}>
+  <Card title="File Naming" icon="signature">
+    Must match regex: `['fraudDetection']+['_']+[\d_]+[\d]+\.csv`
+    
+    Example: `fraudDetection_021119920_010222.csv`
+  </Card>
+  
+  <Card title="Date Stamp" icon="calendar">
+    Must be exactly 9 characters long
+    
+    Example: `021119920`
+  </Card>
+  
+  <Card title="Time Stamp" icon="clock">
+    Must be exactly 6 characters long
+    
+    Example: `010222`
+  </Card>
+  
+  <Card title="Column Count" icon="hashtag">
+    Must contain exactly 38 columns as defined in schema
+  </Card>
+</CardGroup>
+
+### Filename Validation
+
+The system validates filenames using regex from `predictionDataValidation.py:80-95`:
+
+```python
+def manualRegexCreation(self):
+    """
+    Method Name: manualRegexCreation
+    Description: This method contains a manually defined regex based on the 
+                 "FileName" given in "Schema" file. This Regex is used to 
+                 validate the filename of the prediction data.
+    Output: Regex pattern
+    On Failure: None
+    """
+    regex = "['fraudDetection']+['_'']+[\\d_]+[\\d]+\\.csv"
+    return regex
+```
+
+## Validation Process
+
+The validation workflow includes multiple checks:
+
+<Steps>
+  <Step title="Directory Setup">
+    Creates `Good_Raw/` and `Bad_Raw/` directories for file sorting.
+    
+    ```python
+    path = os.path.join("Prediction_Raw_Files_Validated/", "Good_Raw/")
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    path = os.path.join("Prediction_Raw_Files_Validated/", "Bad_Raw/")
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    ```
+  </Step>
+  
+  <Step title="Filename Validation">
+    Validates each file against the regex pattern and timestamp requirements from `predictionDataValidation.py:228-274`.
+    
+    Files matching all criteria are copied to `Good_Raw/`, others to `Bad_Raw/`.
+  </Step>
+  
+  <Step title="Column Count Validation">
+    Verifies that each good file has exactly 38 columns from `predictionDataValidation.py:279-318`:
+    
+    ```python
+    def validateColumnLength(self, NumberofColumns):
+        try:
+            f = open("Prediction_Logs/columnValidationLog.txt", 'a+')
+            self.logger.log(f, "Column Length Validation Started!!")
+            
+            for file in listdir('Prediction_Raw_Files_Validated/Good_Raw/'):
+                csv = pd.read_csv("Prediction_Raw_Files_Validated/Good_Raw/" + file)
+                if csv.shape[1] == NumberofColumns:
+                    csv.to_csv("Prediction_Raw_Files_Validated/Good_Raw/" + file, 
+                              index=None, header=True)
+                else:
+                    shutil.move("Prediction_Raw_Files_Validated/Good_Raw/" + file, 
+                               "Prediction_Raw_Files_Validated/Bad_Raw")
+                    self.logger.log(f, 
+                        "Invalid Column Length for the file!! File moved to Bad Raw Folder :: %s" % file)
+            
+            self.logger.log(f, "Column Length Validation Completed!!")
+        except Exception as e:
+            self.logger.log(f, "Error Occured:: %s" % e)
+            raise e
+    ```
+  </Step>
+  
+  <Step title="Missing Values Check">
+    Validates that no column has all values missing from `predictionDataValidation.py:325-364`:
+    
+    ```python
+    def validateMissingValuesInWholeColumn(self):
+        try:
+            f = open("Prediction_Logs/missingValuesInColumn.txt", 'a+')
+            self.logger.log(f, "Missing Values Validation Started!!")
+
+            for file in listdir('Prediction_Raw_Files_Validated/Good_Raw/'):
+                csv = pd.read_csv("Prediction_Raw_Files_Validated/Good_Raw/" + file)
+                count = 0
+                for columns in csv:
+                    if (len(csv[columns]) - csv[columns].count()) == len(csv[columns]):
+                        count += 1
+                        shutil.move("Prediction_Raw_Files_Validated/Good_Raw/" + file,
+                                   "Prediction_Raw_Files_Validated/Bad_Raw")
+                        self.logger.log(f, 
+                            "Invalid Column Length for the file!! File moved to Bad Raw Folder :: %s" % file)
+                        break
+                if count == 0:
+                    csv.to_csv("Prediction_Raw_Files_Validated/Good_Raw/" + file, 
+                              index=None, header=True)
+        except Exception as e:
+            self.logger.log(f, "Error Occured:: %s" % e)
+            raise e
+    ```
+  </Step>
+  
+  <Step title="Archive Bad Files">
+    Moves invalid files to archive with timestamp for review.
+  </Step>
+</Steps>
+
+## Error Handling
+
+The validation system includes comprehensive error handling:
+
+<AccordionGroup>
+  <Accordion title="ValueError">
+    Raised when required values are not found in the schema file.
+    
+    **Logged to**: `Prediction_Logs/valuesfromSchemaValidationLog.txt`
+  </Accordion>
+  
+  <Accordion title="KeyError">
+    Raised when incorrect keys are used to access schema data.
+    
+    **Logged to**: `Prediction_Logs/valuesfromSchemaValidationLog.txt`
+  </Accordion>
+  
+  <Accordion title="OSError">
+    Raised during file operations (create/move/delete directories).
+    
+    **Logged to**: `Prediction_Logs/GeneralLog.txt`
+  </Accordion>
+  
+  <Accordion title="General Exceptions">
+    All other exceptions are caught, logged, and re-raised with context.
+    
+    **Logged to**: Appropriate log file based on validation step
+  </Accordion>
+</AccordionGroup>
+
+## Validation Logs
+
+Validation activities are logged to separate files:
+
+| Log File | Purpose |
+|----------|----------|
+| `Prediction_Logs/nameValidationLog.txt` | Filename validation results |
+| `Prediction_Logs/columnValidationLog.txt` | Column count validation |
+| `Prediction_Logs/missingValuesInColumn.txt` | Missing value checks |
+| `Prediction_Logs/valuesfromSchemaValidationLog.txt` | Schema extraction |
+| `Prediction_Logs/GeneralLog.txt` | Directory operations and general errors |
+
+## Bad File Archival
+
+Files that fail validation are archived from `predictionDataValidation.py:181-223`:
+
+```python
+def moveBadFilesToArchiveBad(self):
+    now = datetime.now()
+    date = now.date()
+    time = now.strftime("%H%M%S")
+    try:
+        path = "PredictionArchivedBadData"
+        if not os.path.isdir(path):
+            os.makedirs(path)
+        
+        source = 'Prediction_Raw_Files_Validated/Bad_Raw/'
+        dest = 'PredictionArchivedBadData/BadData_' + str(date) + "_" + str(time)
+        
+        if not os.path.isdir(dest):
+            os.makedirs(dest)
+        
+        files = os.listdir(source)
+        for f in files:
+            if f not in os.listdir(dest):
+                shutil.move(source + f, dest)
+        
+        file = open("Prediction_Logs/GeneralLog.txt", 'a+')
+        self.logger.log(file, "Bad files moved to archive")
+        
+        path = 'Prediction_Raw_Files_Validated/'
+        if os.path.isdir(path + 'Bad_Raw/'):
+            shutil.rmtree(path + 'Bad_Raw/')
+        
+        self.logger.log(file, "Bad Raw Data Folder Deleted successfully!!")
+        file.close()
+    except OSError as e:
+        file = open("Prediction_Logs/GeneralLog.txt", 'a+')
+        self.logger.log(file, "Error while moving bad files to archive:: %s" % e)
+        file.close()
+        raise OSError
+```
+
+<Info>
+Bad files are archived with a timestamp (e.g., `PredictionArchivedBadData/BadData_2026-03-04_143022/`) for later review and resubmission after correction.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Prediction Overview" icon="compass" href="/prediction/overview">
+    Understand the complete prediction workflow
+  </Card>
+  <Card title="Batch Prediction" icon="layer-group" href="/prediction/batch-prediction">
+    Learn how validated files are processed
+  </Card>
+</CardGroup>

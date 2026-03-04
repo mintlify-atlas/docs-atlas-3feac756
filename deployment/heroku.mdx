@@ -1,0 +1,420 @@
+---
+title: Heroku Deployment
+description: Deploy your fraud detection ML system to Heroku
+---
+
+## Overview
+
+This guide walks through deploying the fraud detection system to Heroku, a cloud platform that simplifies application deployment and scaling.
+
+## Prerequisites
+
+- Heroku account ([sign up](https://signup.heroku.com/))
+- Heroku CLI installed ([installation guide](https://devcenter.heroku.com/articles/heroku-cli))
+- Git repository initialized
+- Application code ready for deployment
+
+## Procfile Configuration
+
+### Understanding the Procfile
+
+The `Procfile` tells Heroku how to run your application:
+
+```
+web: gunicorn main:app
+```
+
+**Breakdown:**
+- `web`: Process type for HTTP traffic
+- `gunicorn`: WSGI HTTP server
+- `main:app`: Points to the `app` object in `main.py`
+
+### Process Types
+
+The `web` process type:
+- Receives HTTP traffic
+- Must bind to the PORT environment variable
+- Scales horizontally with dynos
+
+### Custom Gunicorn Configuration
+
+For advanced configuration, modify the Procfile:
+
+```
+web: gunicorn main:app --workers 4 --timeout 120 --bind 0.0.0.0:$PORT
+```
+
+**Options:**
+- `--workers 4`: Run 4 worker processes
+- `--timeout 120`: Request timeout in seconds
+- `--bind 0.0.0.0:$PORT`: Bind to Heroku's PORT
+
+## Runtime Requirements
+
+### Python Dependencies
+
+The `requirements.txt` file specifies all Python dependencies:
+
+```txt
+APScheduler==3.6.3
+Flask==1.1.1
+Flask-Cors==3.0.8
+Flask-MonitoringDashboard==3.0.6
+gunicorn==20.0.4
+imbalanced-learn==0.6.1
+numpy==1.18.1
+pandas==0.25.3
+scikit-learn==0.22.1
+xgboost==0.90
+# ... and more
+```
+
+**Key dependencies for Heroku:**
+- `gunicorn==20.0.4`: Production WSGI server
+- `Flask==1.1.1`: Web framework
+- `Flask-MonitoringDashboard==3.0.6`: Performance monitoring
+
+### Python Version (Optional)
+
+Create a `runtime.txt` to specify Python version:
+
+```
+python-3.7.9
+```
+
+If not specified, Heroku uses a default Python version.
+
+## Deployment Steps
+
+### 1. Login to Heroku
+
+```bash
+heroku login
+```
+
+This opens a browser for authentication.
+
+### 2. Create Heroku Application
+
+```bash
+heroku create your-fraud-detection-app
+```
+
+Or let Heroku generate a name:
+
+```bash
+heroku create
+```
+
+### 3. Verify Git Remote
+
+Check that Heroku remote was added:
+
+```bash
+git remote -v
+```
+
+You should see:
+```
+heroku  https://git.heroku.com/your-fraud-detection-app.git (fetch)
+heroku  https://git.heroku.com/your-fraud-detection-app.git (push)
+```
+
+### 4. Deploy to Heroku
+
+Push your code to Heroku:
+
+```bash
+git push heroku main
+```
+
+Or if your branch is named `master`:
+
+```bash
+git push heroku master
+```
+
+### 5. Scale the Web Dyno
+
+Ensure at least one web dyno is running:
+
+```bash
+heroku ps:scale web=1
+```
+
+### 6. Open Your Application
+
+```bash
+heroku open
+```
+
+This opens your deployed application in a browser.
+
+## Environment Configuration
+
+### Setting Environment Variables
+
+The application reads the `PORT` environment variable:
+
+```python
+port = int(os.getenv("PORT", 5001))
+```
+
+**Heroku automatically sets PORT**, but you can set other variables:
+
+```bash
+heroku config:set FLASK_ENV=production
+heroku config:set LANG=en_US.UTF-8
+heroku config:set LC_ALL=en_US.UTF-8
+```
+
+### Viewing Configuration
+
+```bash
+heroku config
+```
+
+Output:
+```
+=== your-fraud-detection-app Config Vars
+FLASK_ENV: production
+LANG:      en_US.UTF-8
+LC_ALL:    en_US.UTF-8
+```
+
+### Unsetting Variables
+
+```bash
+heroku config:unset VARIABLE_NAME
+```
+
+## Database Configuration
+
+### SQLite Limitations on Heroku
+
+Heroku's ephemeral filesystem means:
+- `flask_monitoringdashboard.db` will reset on dyno restart
+- Files are not persisted between deploys
+
+### Solutions
+
+**Option 1: Use Heroku Postgres**
+
+Add PostgreSQL addon:
+
+```bash
+heroku addons:create heroku-postgresql:hobby-dev
+```
+
+Configure Flask-MonitoringDashboard to use PostgreSQL:
+
+```python
+dashboard.config.database_name = os.getenv('DATABASE_URL')
+```
+
+**Option 2: External Database**
+
+Use external services like:
+- Amazon RDS
+- Google Cloud SQL
+- MongoDB Atlas
+
+## Monitoring and Logs
+
+### View Application Logs
+
+```bash
+heroku logs --tail
+```
+
+**Options:**
+- `--tail`: Stream logs in real-time
+- `--num 200`: Show last 200 lines
+- `--source app`: Only app logs
+
+### Access Monitoring Dashboard
+
+Navigate to:
+```
+https://your-fraud-detection-app.herokuapp.com/dashboard
+```
+
+### Heroku Metrics
+
+View dyno metrics:
+
+```bash
+heroku metrics
+```
+
+Or in the Heroku dashboard.
+
+## Testing Endpoints
+
+### Test Home Endpoint
+
+```bash
+curl https://your-fraud-detection-app.herokuapp.com/
+```
+
+### Test Prediction Endpoint
+
+```bash
+curl -X POST https://your-fraud-detection-app.herokuapp.com/predict \
+  -H "Content-Type: application/json" \
+  -d '{"filepath": "Prediction_Batch_files/"}'
+```
+
+### Test Training Endpoint
+
+```bash
+curl -X POST https://your-fraud-detection-app.herokuapp.com/train \
+  -H "Content-Type: application/json" \
+  -d '{"folderPath": "Training_Batch_Files/"}'
+```
+
+## Troubleshooting
+
+### Application Crashes
+
+**Check logs:**
+```bash
+heroku logs --tail
+```
+
+**Common issues:**
+- Missing dependencies in `requirements.txt`
+- Port binding issues (ensure using `$PORT`)
+- Memory limits exceeded
+
+### Build Failures
+
+**Verify Procfile:**
+```bash
+cat Procfile
+```
+Should output: `web: gunicorn main:app`
+
+**Check requirements.txt:**
+```bash
+cat requirements.txt
+```
+Ensure all dependencies are listed with versions.
+
+### Timeout Errors
+
+Increase Gunicorn timeout in Procfile:
+
+```
+web: gunicorn main:app --timeout 300
+```
+
+### Memory Issues
+
+**Check dyno size:**
+```bash
+heroku ps
+```
+
+**Upgrade dyno:**
+```bash
+heroku dyno:type performance-m
+```
+
+### Slug Size Too Large
+
+Optimize dependencies:
+- Remove unused packages from `requirements.txt`
+- Use `.slugignore` to exclude unnecessary files
+
+Create `.slugignore`:
+```
+*.md
+tests/
+.git/
+TrainingArchiveBadData/
+```
+
+## Scaling Your Application
+
+### Horizontal Scaling
+
+Add more web dynos:
+
+```bash
+heroku ps:scale web=3
+```
+
+### Vertical Scaling
+
+Upgrade dyno type:
+
+```bash
+heroku dyno:type performance-m
+```
+
+**Dyno types:**
+- `free`: 512 MB RAM, sleeps after 30 min
+- `hobby`: 512 MB RAM, never sleeps
+- `standard-1x`: 512 MB RAM
+- `standard-2x`: 1 GB RAM
+- `performance-m`: 2.5 GB RAM
+- `performance-l`: 14 GB RAM
+
+## Continuous Deployment
+
+### GitHub Integration
+
+1. Go to Heroku Dashboard
+2. Select your app
+3. Navigate to "Deploy" tab
+4. Connect to GitHub repository
+5. Enable automatic deploys from main branch
+
+### Manual Deploy from Branch
+
+```bash
+git push heroku develop:main
+```
+
+This pushes your `develop` branch to Heroku's `main`.
+
+## Cost Optimization
+
+**Free tier limits:**
+- 550-1000 dyno hours per month
+- Apps sleep after 30 minutes of inactivity
+- No custom domains with SSL
+
+**Recommendations:**
+- Use hobby dyno ($7/month) for production
+- Schedule worker dynos to avoid unnecessary costs
+- Monitor usage with `heroku ps` and `heroku logs`
+
+## Security Best Practices
+
+1. **Environment variables:** Never commit credentials
+   ```bash
+   heroku config:set SECRET_KEY=your-secret-key
+   ```
+
+2. **CORS configuration:** Restrict origins in production
+   ```python
+   CORS(app, resources={r"/*": {"origins": "https://yourdomain.com"}})
+   ```
+
+3. **HTTPS enforcement:** Heroku provides SSL by default
+
+4. **Dashboard authentication:** Secure monitoring dashboard
+   ```python
+   dashboard.config.security.enabled = True
+   ```
+
+## Next Steps
+
+- [Configure monitoring dashboard](/deployment/monitoring)
+- [Production setup guide](/deployment/setup)
+- Set up CI/CD pipeline
+- Configure custom domain
+- Implement automated backups
+- Add health check endpoints

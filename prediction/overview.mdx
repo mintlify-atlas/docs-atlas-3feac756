@@ -1,0 +1,111 @@
+---
+title: Prediction Overview
+description: Understanding how fraud detection predictions work in the system
+---
+
+## How Prediction Works
+
+The fraud detection system generates predictions for new insurance claims data through a multi-stage pipeline that validates, preprocesses, clusters, and applies trained models to identify potential fraud.
+
+## Input Requirements
+
+Prediction data must meet the following requirements:
+
+<CardGroup cols={2}>
+  <Card title="File Format" icon="file-csv">
+    CSV files with a specific naming convention: `fraudDetection_[DateStamp]_[TimeStamp].csv`
+  </Card>
+  <Card title="Column Count" icon="table-columns">
+    Must contain exactly 38 columns as defined in the prediction schema
+  </Card>
+  <Card title="File Location" icon="folder">
+    Files must be placed in `Prediction_Batch_files/` directory
+  </Card>
+  <Card title="Schema Compliance" icon="check-circle">
+    All columns must match the data types defined in `schema_prediction.json`
+  </Card>
+</CardGroup>
+
+### Required Input Fields
+
+The system expects 38 fields including:
+
+- **Customer Information**: `months_as_customer`, `age`, `insured_sex`, `insured_education_level`, `insured_occupation`, `insured_relationship`
+- **Policy Details**: `policy_number`, `policy_bind_date`, `policy_state`, `policy_csl`, `policy_deductable`, `policy_annual_premium`, `umbrella_limit`, `insured_zip`
+- **Incident Information**: `incident_date`, `incident_type`, `collision_type`, `incident_severity`, `authorities_contacted`, `incident_state`, `incident_city`, `incident_location`, `incident_hour_of_the_day`
+- **Claim Details**: `total_claim_amount`, `injury_claim`, `property_claim`, `vehicle_claim`, `number_of_vehicles_involved`, `property_damage`, `bodily_injuries`, `witnesses`, `police_report_available`
+- **Vehicle Information**: `auto_make`, `auto_model`, `auto_year`
+- **Financial Data**: `capital-gains`, `capital-loss`
+
+## Prediction Flow
+
+The prediction process follows a structured pipeline:
+
+<Steps>
+  <Step title="Data Validation">
+    Validates file names, column counts, and data quality. Files are sorted into Good_Raw and Bad_Raw folders.
+    
+    [Learn more about data validation](/prediction/data-validation)
+  </Step>
+  
+  <Step title="Data Loading">
+    Validated files are loaded into a temporary database and exported as a consolidated CSV file (`Prediction_FileFromDB/InputFile.csv`).
+  </Step>
+  
+  <Step title="Data Preprocessing">
+    - Removes non-predictive columns (policy_number, dates, location details, etc.)
+    - Replaces '?' with NaN for missing value handling
+    - Imputes missing values using appropriate strategies
+    - Encodes categorical variables
+    - Scales numerical features
+  </Step>
+  
+  <Step title="Clustering">
+    Applies the pre-trained KMeans model to assign each record to a cluster. This enables cluster-specific model selection.
+  </Step>
+  
+  <Step title="Model Loading & Prediction">
+    For each cluster:
+    - Loads the appropriate trained model for that cluster
+    - Generates predictions (0 = not fraud, 1 = fraud)
+    - Encodes results as Y (fraud) or N (not fraud)
+  </Step>
+  
+  <Step title="Output Generation">
+    Predictions are compiled into a CSV file saved to `Prediction_Output_File/Predictions.csv`.
+    
+    [Learn more about output format](/prediction/output)
+  </Step>
+</Steps>
+
+## Output Format
+
+The system generates a CSV file with a single column:
+
+- **Predictions**: Contains 'Y' (fraud detected) or 'N' (no fraud) for each input record
+
+<Note>
+The prediction process deletes any existing prediction file from previous runs to ensure fresh results.
+</Note>
+
+## Error Handling
+
+All prediction operations are logged to `Prediction_Logs/Prediction_Log.txt`. Errors during prediction:
+
+- Are logged with detailed exception messages
+- Halt the prediction process
+- Raise exceptions for upstream handling
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Batch Prediction" icon="layer-group" href="/prediction/batch-prediction">
+    Learn how to process batch files for prediction
+  </Card>
+  <Card title="Data Validation" icon="shield-check" href="/prediction/data-validation">
+    Understand validation requirements and rules
+  </Card>
+  <Card title="Output Format" icon="file-export" href="/prediction/output">
+    Learn how to interpret prediction results
+  </Card>
+</CardGroup>

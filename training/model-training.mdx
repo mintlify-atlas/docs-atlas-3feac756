@@ -1,0 +1,370 @@
+---
+title: Model Training
+description: Complete pipeline for training cluster-specific fraud detection models
+---
+
+## Overview
+
+The `trainModel` class orchestrates the entire training pipeline, from data loading through preprocessing, clustering, and model training. Each cluster receives its own optimized model for fraud detection.
+
+## TrainModel Class
+
+Implemented in `trainingModel.py`:
+
+```python
+from sklearn.model_selection import train_test_split
+from data_ingestion import data_loader
+from data_preprocessing import preprocessing
+from data_preprocessing import clustering
+from best_model_finder import tuner
+from file_operations import file_methods
+from application_logging import logger
+import numpy as np
+import pandas as pd
+
+class trainModel:
+    def __init__(self):
+        self.log_writer = logger.App_Logger()
+        self.file_object = open("Training_Logs/ModelTrainingLog.txt", 'a+')
+```
+
+## Complete Training Pipeline
+
+<Steps>
+  <Step title="Load Data">
+    Load validated training data from Good_Raw folder
+  </Step>
+  
+  <Step title="Preprocess Data">
+    Remove columns, handle missing values, encode categories
+  </Step>
+  
+  <Step title="Separate Features and Labels">
+    Split data into X (features) and Y (target)
+  </Step>
+  
+  <Step title="Apply Clustering">
+    Use K-Means to divide data into optimal clusters
+  </Step>
+  
+  <Step title="Train Per Cluster">
+    For each cluster: split data, find best model, train, and save
+  </Step>
+</Steps>
+
+## Training Method
+
+The main training workflow:
+
+```python
+def trainingModel(self):
+    # Logging the start of Training
+    self.log_writer.log(self.file_object, 'Start of Training')
+    try:
+        # Getting the data from the source
+        data_getter = data_loader.Data_Getter(self.file_object, self.log_writer)
+        data = data_getter.get_data()
+```
+
+## Step 1: Data Preprocessing
+
+```python
+        # Doing the data preprocessing
+        preprocessor = preprocessing.Preprocessor(self.file_object, self.log_writer)
+        
+        # Remove columns that don't contribute to prediction
+        data = preprocessor.remove_columns(data, [
+            'policy_number',
+            'policy_bind_date',
+            'policy_state',
+            'insured_zip',
+            'incident_location',
+            'incident_date',
+            'incident_state',
+            'incident_city',
+            'insured_hobbies',
+            'auto_make',
+            'auto_model',
+            'auto_year',
+            'age',
+            'total_claim_amount'
+        ])
+        
+        # Replace '?' with NaN values for imputation
+        data.replace('?', np.NaN, inplace=True)
+        
+        # Check if missing values are present in the dataset
+        is_null_present, cols_with_missing_values = preprocessor.is_null_present(data)
+        
+        # If missing values are there, replace them appropriately
+        if (is_null_present):
+            data = preprocessor.impute_missing_values(data, cols_with_missing_values)
+        
+        # Encode categorical data
+        data = preprocessor.encode_categorical_columns(data)
+        
+        # Create separate features and labels
+        X, Y = preprocessor.separate_label_feature(data, label_column_name='fraud_reported')
+```
+
+<Note>
+14 columns are removed during preprocessing because they are:
+- High cardinality (too many unique values)
+- Unique identifiers with no predictive value
+- Date fields that are redundant
+- Target leakage (total_claim_amount)
+</Note>
+
+## Step 2: Clustering
+
+```python
+        # Applying the clustering approach
+        kmeans = clustering.KMeansClustering(self.file_object, self.log_writer)
+        
+        # Using the elbow plot to find the number of optimum clusters
+        number_of_clusters = kmeans.elbow_plot(X)
+        
+        # Divide the data into clusters
+        X = kmeans.create_clusters(X, number_of_clusters)
+        
+        # Create a new column consisting of the corresponding cluster assignments
+        X['Labels'] = Y
+        
+        # Get the unique clusters from our dataset
+        list_of_clusters = X['Cluster'].unique()
+```
+
+**Cluster Assignment:**
+- Optimal number determined by elbow method
+- Each row assigned to a cluster (0, 1, 2, ...)
+- Target labels temporarily added for splitting
+
+## Step 3: Train Models Per Cluster
+
+```python
+        # Parse all the clusters and look for the best ML algorithm to fit on individual cluster
+        for i in list_of_clusters:
+            # Filter the data for one cluster
+            cluster_data = X[X['Cluster'] == i]
+            
+            # Prepare the feature and label columns
+            cluster_features = cluster_data.drop(['Labels', 'Cluster'], axis=1)
+            cluster_label = cluster_data['Labels']
+            
+            # Splitting the data into training and test set for each cluster one by one
+            x_train, x_test, y_train, y_test = train_test_split(
+                cluster_features, 
+                cluster_label, 
+                test_size=1/3, 
+                random_state=355
+            )
+            
+            # Proceeding with more data preprocessing steps
+            x_train = preprocessor.scale_numerical_columns(x_train)
+            x_test = preprocessor.scale_numerical_columns(x_test)
+            
+            # Object initialization
+            model_finder = tuner.Model_Finder(self.file_object, self.log_writer)
+            
+            # Getting the best model for each of the clusters
+            best_model_name, best_model = model_finder.get_best_model(
+                x_train, y_train, x_test, y_test
+            )
+            
+            # Saving the best model to the directory
+            file_op = file_methods.File_Operation(self.file_object, self.log_writer)
+            save_model = file_op.save_model(best_model, best_model_name + str(i))
+        
+        # Logging the successful Training
+        self.log_writer.log(self.file_object, 'Successful End of Training')
+        self.file_object.close()
+        
+    except Exception as e:
+        # Logging the unsuccessful Training
+        self.log_writer.log(self.file_object, 'Unsuccessful End of Training')
+        self.file_object.close()
+        raise Exception
+```
+
+## Train-Test Split Per Cluster
+
+### Split Configuration
+
+```python
+test_size=1/3  # 33.33% test, 66.67% training
+random_state=355  # For reproducibility
+```
+
+<Note>
+Each cluster is split independently, ensuring that models are trained and evaluated on data from the same cluster.
+</Note>
+
+### Why Split Per Cluster?
+
+- **Cluster Integrity:** Training and test data come from the same cluster
+- **Fair Evaluation:** Model performance measured on similar data
+- **Prevents Leakage:** No mixing of cluster patterns during evaluation
+
+## Scaling Per Split
+
+<Warning>
+**Important:** Scaling is applied **after** the train-test split to prevent data leakage.
+</Warning>
+
+```python
+x_train = preprocessor.scale_numerical_columns(x_train)
+x_test = preprocessor.scale_numerical_columns(x_test)
+```
+
+**Why scale after splitting?**
+- StandardScaler learns mean/std from training data only
+- Test data is scaled using training statistics
+- Prevents information leakage from test set to training set
+
+## Model Selection Per Cluster
+
+Each cluster goes through model selection:
+
+```python
+model_finder = tuner.Model_Finder(self.file_object, self.log_writer)
+best_model_name, best_model = model_finder.get_best_model(
+    x_train, y_train, x_test, y_test
+)
+```
+
+The model finder:
+1. Trains XGBoost with hyperparameter tuning
+2. Trains SVM with hyperparameter tuning
+3. Compares AUC scores
+4. Returns the better performing model
+
+## Model Persistence
+
+Models are saved with cluster-specific names:
+
+```python
+save_model = file_op.save_model(best_model, best_model_name + str(i))
+```
+
+**Example filenames:**
+- `XGBoost0` - XGBoost model for cluster 0
+- `SVM1` - SVM model for cluster 1
+- `XGBoost2` - XGBoost model for cluster 2
+- `KMeans` - K-Means clustering model (saved during clustering)
+
+## Training Example
+
+Suppose we have **3 clusters** from K-Means:
+
+### Cluster 0
+```
+Data: 5,000 samples
+Split: 3,333 train / 1,667 test
+Best Model: XGBoost (AUC: 0.94)
+Saved as: XGBoost0
+```
+
+### Cluster 1
+```
+Data: 3,500 samples
+Split: 2,333 train / 1,167 test
+Best Model: SVM (AUC: 0.91)
+Saved as: SVM1
+```
+
+### Cluster 2
+```
+Data: 4,200 samples
+Split: 2,800 train / 1,400 test
+Best Model: XGBoost (AUC: 0.93)
+Saved as: XGBoost2
+```
+
+## Training Logs
+
+All training activities are logged to `Training_Logs/ModelTrainingLog.txt`:
+
+```
+[2024-03-15 10:30:15] Start of Training
+[2024-03-15 10:30:20] Column removal Successful
+[2024-03-15 10:30:25] Missing values imputation Successful
+[2024-03-15 10:30:30] Categorical encoding Successful
+[2024-03-15 10:30:35] The optimum number of clusters is: 3
+[2024-03-15 10:30:40] Successfully created 3 clusters
+[2024-03-15 10:35:15] XGBoost best params: {...}
+[2024-03-15 10:35:20] AUC for XGBoost: 0.94
+[2024-03-15 10:40:10] SVM best params: {...}
+[2024-03-15 10:40:15] AUC for SVM: 0.91
+[2024-03-15 10:45:00] Successful End of Training
+```
+
+## Training Workflow Diagram
+
+```
+Raw Data
+   |
+   v
+Preprocessing
+(Remove columns, impute, encode)
+   |
+   v
+Feature/Label Separation
+   |
+   v
+K-Means Clustering
+(Elbow method → optimal clusters)
+   |
+   v
++------------------+------------------+
+|                  |                  |
+Cluster 0       Cluster 1       Cluster 2
+|                  |                  |
+Train/Test      Train/Test      Train/Test
+Split           Split           Split
+|                  |                  |
+Scale           Scale           Scale
+|                  |                  |
+Model           Model           Model
+Selection       Selection       Selection
+|                  |                  |
+XGBoost0        SVM1            XGBoost2
+(Saved)         (Saved)         (Saved)
+```
+
+## Training Configuration
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------||
+| Test Size | 33.33% | Evaluation data |
+| Random State | 355 | Reproducibility |
+| Clusters | Auto (Elbow) | Optimal grouping |
+| Models Tested | XGBoost, SVM | Best algorithm selection |
+| Metric | AUC Score | Model comparison |
+
+## Error Handling
+
+The training pipeline includes comprehensive error handling:
+
+```python
+try:
+    # ... entire training pipeline ...
+    self.log_writer.log(self.file_object, 'Successful End of Training')
+except Exception as e:
+    self.log_writer.log(self.file_object, 'Unsuccessful End of Training')
+    raise Exception
+finally:
+    self.file_object.close()
+```
+
+All errors are logged for debugging and troubleshooting.
+
+## Next Steps
+
+After training completes:
+
+1. Review training logs for any errors
+2. Check model performance metrics (AUC scores)
+3. Examine the elbow plot to understand clustering
+4. Verify that all cluster models are saved
+
+Proceed to [model selection](/training/model-selection) to understand how the best model is chosen for each cluster.

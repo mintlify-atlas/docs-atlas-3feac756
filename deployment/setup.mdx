@@ -1,0 +1,188 @@
+---
+title: Production Setup
+description: Configure your fraud detection system for production deployment
+---
+
+## Overview
+
+This guide covers the production deployment setup for the fraud detection ML system. The application is designed to run with Gunicorn as the WSGI HTTP server instead of Flask's development server.
+
+## Production Server Configuration
+
+### Using Gunicorn
+
+The application uses **Gunicorn** (Green Unicorn) as the production WSGI HTTP server. This is defined in the `Procfile`:
+
+```
+web: gunicorn main:app
+```
+
+This configuration:
+- Runs Gunicorn as the web server
+- Points to the `app` object in `main.py`
+- Uses default Gunicorn workers and settings
+
+### Why Gunicorn?
+
+Flask's built-in development server is not suitable for production because:
+- It's single-threaded and cannot handle concurrent requests efficiently
+- It lacks production-grade security features
+- It's not optimized for performance
+
+Gunicorn provides:
+- Multiple worker processes for handling concurrent requests
+- Production-ready performance and stability
+- Better resource management
+
+## Environment Variables
+
+### PORT Configuration
+
+The application reads the PORT from environment variables with a fallback default:
+
+```python
+port = int(os.getenv("PORT", 5001))
+```
+
+**Environment Variables:**
+- `PORT`: The port number for the application (default: 5001)
+- `LANG`: Set to `en_US.UTF-8` for proper encoding
+- `LC_ALL`: Set to `en_US.UTF-8` for locale settings
+
+**Setting environment variables:**
+
+```bash
+export PORT=8000
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+```
+
+## File Structure Requirements
+
+The application expects the following directory structure:
+
+```
+project-root/
+├── main.py                          # Main Flask application
+├── Procfile                         # Process configuration
+├── requirements.txt                 # Python dependencies
+├── templates/                       # HTML templates
+│   └── index.html
+├── Training_Batch_Files/            # Training data batches
+├── Prediction_Batch_files/          # Prediction data batches
+├── Training_Raw_data_validation/    # Training data validation
+├── Prediction_Raw_Data_Validation/  # Prediction data validation
+├── data/                            # Data storage
+├── application_logging/             # Application logs
+└── flask_monitoringdashboard.db     # Monitoring database
+```
+
+### Required Modules
+
+Ensure these custom modules are present:
+- `prediction_Validation_Insertion.py`
+- `trainingModel.py`
+- `training_Validation_Insertion.py`
+- `predictFromModel.py`
+- `DataTransform_Training/`
+- `DataTransformation_Prediction/`
+- `DataTypeValidation_Insertion_Training/`
+- `DataTypeValidation_Insertion_Prediction/`
+- `data_ingestion/`
+- `data_preprocessing/`
+- `file_operations/`
+- `best_model_finder/`
+
+## Database Setup
+
+### Flask Monitoring Dashboard Database
+
+The application uses SQLite for the Flask Monitoring Dashboard:
+- **Database file**: `flask_monitoringdashboard.db`
+- Automatically created on first run
+- Stores monitoring metrics and performance data
+
+### Schema Files
+
+The system uses JSON schema files for data validation:
+- `schema_training.json`: Training data schema
+- `schema_prediction.json`: Prediction data schema
+
+Ensure these files are present and properly configured before deployment.
+
+## Dependencies Installation
+
+Install all required dependencies from `requirements.txt`:
+
+```bash
+pip install -r requirements.txt
+```
+
+**Key dependencies:**
+- Flask 1.1.1
+- Flask-Cors 3.0.8
+- Flask-MonitoringDashboard 3.0.6
+- Gunicorn 20.0.4
+- scikit-learn 0.22.1
+- pandas 0.25.3
+- numpy 1.18.1
+- xgboost 0.90
+- imbalanced-learn 0.6.1
+
+## Running in Production
+
+### Local Production Testing
+
+Test the production configuration locally:
+
+```bash
+gunicorn main:app --bind 0.0.0.0:8000
+```
+
+### With Worker Processes
+
+For better performance, specify multiple workers:
+
+```bash
+gunicorn main:app --bind 0.0.0.0:8000 --workers 4
+```
+
+### With Logging
+
+```bash
+gunicorn main:app \
+  --bind 0.0.0.0:8000 \
+  --workers 4 \
+  --access-logfile - \
+  --error-logfile -
+```
+
+## Security Considerations
+
+1. **CORS Configuration**: The application uses Flask-CORS with open access. Review and restrict for production:
+   ```python
+   CORS(app, resources={r"/*": {"origins": "https://yourdomain.com"}})
+   ```
+
+2. **Debug Mode**: Ensure `debug=True` is removed or set to `False` in production
+
+3. **Environment Variables**: Use environment-specific configuration files
+
+4. **File Permissions**: Restrict access to data directories and log files
+
+## Health Check
+
+The home route serves as a basic health check:
+
+```bash
+curl http://localhost:8000/
+```
+
+Should return the index.html template.
+
+## Next Steps
+
+- [Configure monitoring dashboard](/deployment/monitoring)
+- [Deploy to Heroku](/deployment/heroku)
+- Set up automated backups for training data
+- Configure logging aggregation

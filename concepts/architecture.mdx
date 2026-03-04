@@ -1,0 +1,314 @@
+---
+title: 'Technical Architecture'
+description: 'Understand the system components, data flow, and module organization'
+icon: 'sitemap'
+---
+
+## System Components
+
+The fraud detection system follows a modular architecture with clear separation of concerns:
+
+### Core Application Layer
+
+<CardGroup cols={2}>
+  <Card title="Flask API Server" icon="server">
+    **Location:** `main.py`
+    
+    Entry point handling HTTP requests, routing, and response formatting. Runs on port 5001 with Flask-MonitoringDashboard integration.
+  </Card>
+  
+  <Card title="Training Engine" icon="graduation-cap">
+    **Location:** `trainingModel.py`
+    
+    Orchestrates the complete training pipeline from data loading through model persistence. Implements the `trainModel` class.
+  </Card>
+  
+  <Card title="Prediction Engine" icon="wand-magic-sparkles">
+    **Location:** `predictFromModel.py`
+    
+    Handles prediction requests, loads appropriate models, and generates fraud predictions. Implements the `prediction` class.
+  </Card>
+  
+  <Card title="Validation Layer" icon="circle-check">
+    **Location:** `training_Validation_Insertion.py`, `prediction_Validation_Insertion.py`
+    
+    Validates incoming data against schemas before processing enters training or prediction pipelines.
+  </Card>
+</CardGroup>
+
+### Data Processing Modules
+
+#### Data Ingestion
+**Location:** `data_ingestion/`
+
+- `data_loader.py` - Loads training data from `Training_FileFromDB/InputFile.csv`
+- `data_loader_prediction.py` - Loads prediction data from validated sources
+
+<Tip>
+  The `Data_Getter` class provides a consistent interface for reading CSV files with built-in error handling and logging.
+</Tip>
+
+#### Data Preprocessing
+**Location:** `data_preprocessing/`
+
+- **`preprocessing.py`** - The `Preprocessor` class handles:
+  - Column removal (irrelevant features)
+  - Missing value imputation using `CategoricalImputer`
+  - Categorical encoding (label encoding + one-hot encoding)
+  - Feature scaling with `StandardScaler`
+  - Label separation
+  - Dataset balancing with `RandomOverSampler`
+
+- **`clustering.py`** - The `KMeansClustering` class provides:
+  - Elbow plot generation for optimal cluster count
+  - K-Means model training and prediction
+  - Cluster assignment to data points
+
+#### Model Selection
+**Location:** `best_model_finder/`
+
+**`tuner.py`** - The `Model_Finder` class implements:
+
+```python
+class Model_Finder:
+    def get_best_params_for_svm(train_x, train_y)
+    def get_best_params_for_xgboost(train_x, train_y)
+    def get_best_model(train_x, train_y, test_x, test_y)
+```
+
+- **SVM Hyperparameters:** kernel (rbf, sigmoid), C (0.1, 0.5, 1.0), random_state
+- **XGBoost Hyperparameters:** n_estimators (100, 130), criterion (gini, entropy), max_depth (8-10)
+- **Selection Metric:** ROC-AUC score (falls back to accuracy for single-class scenarios)
+
+#### File Operations
+**Location:** `file_operations/`
+
+**`file_methods.py`** - The `File_Operation` class manages:
+- Model serialization and deserialization
+- Finding correct model files for cluster assignments
+- Model versioning per cluster
+
+### Validation & Transformation Modules
+
+<Tabs>
+  <Tab title="Training Path">
+    - **DataTypeValidation_Insertion_Training/** - Schema validation against `schema_training.json`
+    - **DataTransform_Training/** - Data transformation specific to training
+    - **Training_Raw_data_validation/** - Raw data quality checks
+    - **Training_Batch_Files/** - Batch file storage
+    - **TrainingArchiveBadData/** - Archive for rejected data
+  </Tab>
+  
+  <Tab title="Prediction Path">
+    - **DataTypeValidation_Insertion_Prediction/** - Schema validation against `schema_prediction.json`
+    - **DataTransformation_Prediction/** - Data transformation for predictions
+    - **Prediction_Raw_Data_Validation/** - Prediction data validation including `deletePredictionFile()` method
+    - **Prediction_Batch_files/** - Input batch storage
+    - **Prediction_Output_File/** - Contains `Predictions.csv` output
+  </Tab>
+</Tabs>
+
+### Logging & Monitoring
+
+**Location:** `application_logging/`
+
+**`logger.py`** - The `App_Logger` class provides:
+- Centralized logging across all modules
+- Training logs in `Training_Logs/ModelTrainingLog.txt`
+- Prediction logs in `Prediction_Logs/Prediction_Log.txt`
+- Structured log format for debugging and auditing
+
+## Data Flow
+
+### Training Flow
+
+```python
+# Simplified training flow from main.py and trainingModel.py
+
+1. POST /train → train_validation(path)
+   ├─ Validate schema (39 columns expected)
+   ├─ Check data types per schema_training.json
+   └─ Store validated data
+
+2. trainModel.trainingModel()
+   ├─ data_loader.get_data() → Load CSV
+   ├─ preprocessing.remove_columns() → Drop 14 irrelevant columns
+   ├─ preprocessing.impute_missing_values() → Handle NaN
+   ├─ preprocessing.encode_categorical_columns() → Encode features
+   ├─ preprocessing.separate_label_feature() → Split X, Y
+   ├─ clustering.elbow_plot() → Find optimal clusters
+   ├─ clustering.create_clusters() → Assign clusters
+   └─ For each cluster:
+       ├─ train_test_split(test_size=1/3)
+       ├─ preprocessing.scale_numerical_columns()
+       ├─ Model_Finder.get_best_model() → Train XGBoost & SVM
+       └─ File_Operation.save_model() → Persist best model
+```
+
+<Note>
+  **Columns Removed During Preprocessing:**  
+  `policy_number`, `policy_bind_date`, `policy_state`, `insured_zip`, `incident_location`, `incident_date`, `incident_state`, `incident_city`, `insured_hobbies`, `auto_make`, `auto_model`, `auto_year`, `age`, `total_claim_amount`
+  
+  These are removed as they don't contribute to prediction or may cause overfitting.
+</Note>
+
+### Prediction Flow
+
+```python
+# Simplified prediction flow from main.py and predictFromModel.py
+
+1. POST /predict → pred_validation(path)
+   ├─ Validate schema (38 columns, no fraud_reported)
+   └─ Store validated data
+
+2. prediction.predictionFromModel()
+   ├─ deletePredictionFile() → Clear old predictions
+   ├─ data_loader_prediction.get_data() → Load CSV
+   ├─ preprocessing.remove_columns() → Same 14 columns
+   ├─ preprocessing.impute_missing_values() → Handle NaN
+   ├─ preprocessing.encode_categorical_columns() → Encode
+   ├─ preprocessing.scale_numerical_columns() → Scale
+   ├─ File_Operation.load_model('KMeans') → Load clustering
+   ├─ kmeans.predict(data) → Assign clusters
+   └─ For each cluster:
+       ├─ File_Operation.find_correct_model_file()
+       ├─ File_Operation.load_model(model_name)
+       ├─ model.predict() → 0 or 1
+       └─ Map: 0='N', 1='Y'
+   
+3. Output → Prediction_Output_File/Predictions.csv
+```
+
+## Module Organization
+
+The source code in `~/workspace/source/` follows this structure:
+
+```
+source/
+├── main.py                          # Flask app entry point
+├── trainingModel.py                 # Training orchestration
+├── predictFromModel.py              # Prediction orchestration
+├── training_Validation_Insertion.py # Training validation
+├── prediction_Validation_Insertion.py # Prediction validation
+│
+├── data_ingestion/
+│   ├── data_loader.py               # Training data loader
+│   └── data_loader_prediction.py    # Prediction data loader
+│
+├── data_preprocessing/
+│   ├── preprocessing.py             # Feature engineering
+│   └── clustering.py                # K-Means clustering
+│
+├── best_model_finder/
+│   └── tuner.py                     # Model selection (XGBoost vs SVM)
+│
+├── file_operations/
+│   └── file_methods.py              # Model I/O operations
+│
+├── application_logging/
+│   └── logger.py                    # Centralized logging
+│
+├── DataTypeValidation_Insertion_Training/
+├── DataTypeValidation_Insertion_Prediction/
+├── DataTransform_Training/
+├── DataTransformation_Prediction/
+├── Training_Raw_data_validation/
+├── Prediction_Raw_Data_Validation/
+│
+├── schema_training.json             # Training schema (39 cols)
+├── schema_prediction.json           # Prediction schema (38 cols)
+└── requirements.txt                 # Dependencies
+```
+
+## Training and Prediction Pipeline Interaction
+
+<Steps>
+  <Step title="Model Training Phase">
+    The training pipeline creates cluster-specific models. For example, if K-Means identifies 3 optimal clusters, the system trains 6 models total:
+    - `XGBoost0`, `SVM0` (cluster 0) → best saved
+    - `XGBoost1`, `SVM1` (cluster 1) → best saved
+    - `XGBoost2`, `SVM2` (cluster 2) → best saved
+  </Step>
+  
+  <Step title="Model Persistence">
+    The `File_Operation.save_model()` method saves:
+    - K-Means model as `KMeans`
+    - Best classifier per cluster as `{ModelName}{ClusterID}`
+  </Step>
+  
+  <Step title="Prediction Phase">
+    The prediction pipeline:
+    1. Loads the saved K-Means model
+    2. Assigns each prediction row to a cluster
+    3. Loads the corresponding best model for that cluster
+    4. Generates predictions using the cluster-specific model
+  </Step>
+  
+  <Step title="Result Aggregation">
+    Predictions from all clusters are combined into a single DataFrame and exported to `Predictions.csv`
+  </Step>
+</Steps>
+
+<Warning>
+  **Model Consistency:** The preprocessing steps (column removal, encoding mappings, scaling) must be identical between training and prediction to ensure model compatibility.
+</Warning>
+
+## API Endpoints
+
+### POST /train
+
+**Request:**
+```json
+{
+  "folderPath": "/path/to/training/data"
+}
+```
+
+**Response:**
+```
+Training successful!!
+```
+
+**Reference:** `main.py:64-92`
+
+### POST /predict
+
+**Request:**
+```json
+{
+  "filepath": "/path/to/prediction/data"
+}
+```
+
+**Response:**
+```
+Prediction File created at Prediction_Output_File/Predictions.csv!!!
+```
+
+**Reference:** `main.py:25-60`
+
+### GET /dashboard
+
+Access Flask-MonitoringDashboard for performance metrics and API monitoring.
+
+## Deployment Considerations
+
+<Check>
+  **Production Deployment:**
+  - Use Gunicorn as WSGI server (see `Procfile`)
+  - Deploy behind Nginx reverse proxy
+  - Configure environment variables for paths and ports
+  - Enable CORS for cross-origin requests (already configured)
+</Check>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Pipeline" icon="pipe" href="/concepts/data-pipeline">
+    Learn about data ingestion and schema validation
+  </Card>
+  
+  <Card title="Fraud Detection" icon="shield-check" href="/concepts/fraud-detection">
+    Explore fraud detection methodology and features
+  </Card>
+</CardGroup>

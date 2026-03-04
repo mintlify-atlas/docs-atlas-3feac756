@@ -1,0 +1,303 @@
+---
+title: K-Means Clustering
+description: Divide training data into clusters to train specialized models for different fraud patterns
+---
+
+## Overview
+
+The fraud detection system uses **K-Means clustering** to divide the training data into groups before model training. This approach allows the system to train separate models for each cluster, improving prediction accuracy by capturing different fraud patterns.
+
+## Why Use Clustering?
+
+Clustering provides several benefits:
+
+- **Specialized Models:** Each cluster gets its own model optimized for specific fraud patterns
+- **Better Performance:** Models trained on similar data perform better than one-size-fits-all models
+- **Pattern Recognition:** Different clusters may represent different types of insurance claims
+- **Scalability:** New clusters can be added as fraud patterns evolve
+
+<Note>
+Instead of training one model for all data, we train multiple specialized models, each expert in detecting fraud for a specific type of claim.
+</Note>
+
+## KMeansClustering Class
+
+Implemented in `data_preprocessing/clustering.py`:
+
+```python
+from sklearn.cluster import KMeans
+from kneed import KneeLocator
+import matplotlib.pyplot as plt
+
+class KMeansClustering:
+    def __init__(self, file_object, logger_object):
+        self.file_object = file_object
+        self.logger_object = logger_object
+```
+
+## Clustering Workflow
+
+<Steps>
+  <Step title="Find Optimal Clusters">
+    Use the elbow method to determine the best number of clusters
+  </Step>
+  
+  <Step title="Create Clusters">
+    Apply K-Means to divide data into clusters
+  </Step>
+  
+  <Step title="Save Cluster Model">
+    Persist the K-Means model for prediction
+  </Step>
+  
+  <Step title="Add Cluster Labels">
+    Add cluster assignments as a new column to the dataset
+  </Step>
+</Steps>
+
+## Elbow Method
+
+The elbow method determines the optimal number of clusters by analyzing the Within-Cluster Sum of Squares (WCSS):
+
+```python
+def elbow_plot(self, data):
+    self.logger_object.log(self.file_object, 
+                          'Entered the elbow_plot method of the KMeansClustering class')
+    wcss = []  # initializing an empty list
+    
+    try:
+        # Test cluster counts from 1 to 10
+        for i in range(1, 11):
+            # Initialize KMeans with i clusters
+            kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
+            # Fit the data
+            kmeans.fit(data)
+            # Store the inertia (WCSS)
+            wcss.append(kmeans.inertia_)
+        
+        # Create the graph between WCSS and number of clusters
+        plt.plot(range(1, 11), wcss)
+        plt.title('The Elbow Method')
+        plt.xlabel('Number of clusters')
+        plt.ylabel('WCSS')
+        plt.savefig('preprocessing_data/K-Means_Elbow.PNG')
+        
+        # Find the value of the optimum cluster programmatically
+        self.kn = KneeLocator(range(1, 11), wcss, curve='convex', direction='decreasing')
+        
+        self.logger_object.log(self.file_object, 
+                              'The optimum number of clusters is: ' + str(self.kn.knee) + 
+                              ' . Exited the elbow_plot method of the KMeansClustering class')
+        return self.kn.knee
+        
+    except Exception as e:
+        self.logger_object.log(self.file_object,
+                              'Exception occured in elbow_plot method of the KMeansClustering class. Exception message: ' + str(e))
+        raise Exception()
+```
+
+### How It Works
+
+1. **Test Multiple Cluster Counts:** Run K-Means with 1 to 10 clusters
+2. **Calculate WCSS:** For each cluster count, calculate the within-cluster sum of squares
+3. **Plot Results:** Create a plot showing WCSS vs. number of clusters
+4. **Find Elbow:** Use `KneeLocator` to programmatically find the "elbow" point
+
+<Note>
+**WCSS (Within-Cluster Sum of Squares):** Measures the compactness of clusters. Lower values indicate tighter clusters.
+
+The "elbow" is the point where adding more clusters doesn't significantly reduce WCSS.
+</Note>
+
+### K-Means++ Initialization
+
+```python
+kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
+```
+
+- **init='k-means++':** Smart initialization that spreads out initial centroids
+- **random_state=42:** Ensures reproducible results
+
+### Output
+
+Creates `preprocessing_data/K-Means_Elbow.PNG` showing the elbow plot:
+
+```
+WCSS
+  |
+  |\___
+  |    \___
+  |        \___
+  |            \______
+  +---------------------> Number of Clusters
+  1  2  3  4  5  6  7  8  9  10
+       ^elbow
+```
+
+## Creating Clusters
+
+Once the optimal number of clusters is determined, apply K-Means:
+
+```python
+def create_clusters(self, data, number_of_clusters):
+    self.logger_object.log(self.file_object, 
+                          'Entered the create_clusters method of the KMeansClustering class')
+    self.data = data
+    
+    try:
+        # Initialize KMeans with optimal cluster count
+        self.kmeans = KMeans(n_clusters=number_of_clusters, 
+                            init='k-means++', 
+                            random_state=42)
+        
+        # Divide data into clusters
+        self.y_kmeans = self.kmeans.fit_predict(data)
+        
+        # Save the KMeans model to directory
+        self.file_op = file_methods.File_Operation(self.file_object, self.logger_object)
+        self.save_model = self.file_op.save_model(self.kmeans, 'KMeans')
+        
+        # Create a new column in dataset for storing the cluster information
+        self.data['Cluster'] = self.y_kmeans
+        
+        self.logger_object.log(self.file_object, 
+                              'succesfully created ' + str(self.kn.knee) + 
+                              ' clusters. Exited the create_clusters method of the KMeansClustering class')
+        return self.data
+        
+    except Exception as e:
+        self.logger_object.log(self.file_object,
+                              'Exception occured in create_clusters method of the KMeansClustering class. Exception message: ' + str(e))
+        raise Exception()
+```
+
+### Key Operations
+
+1. **fit_predict():** Fits K-Means and assigns cluster labels in one step
+2. **Save Model:** Persists the trained K-Means model for use during prediction
+3. **Add Cluster Column:** Adds cluster assignments to the dataset
+
+<Warning>
+The K-Means model must be saved because prediction data will need to be assigned to the same clusters.
+</Warning>
+
+## Integration with Training Pipeline
+
+From `trainingModel.py:56-68`, here's how clustering is used:
+
+```python
+# Apply the clustering approach
+kmeans = clustering.KMeansClustering(self.file_object, self.log_writer)
+
+# Using the elbow plot to find the number of optimum clusters
+number_of_clusters = kmeans.elbow_plot(X)
+
+# Divide the data into clusters
+X = kmeans.create_clusters(X, number_of_clusters)
+
+# Create a new column consisting of the corresponding cluster assignments
+X['Labels'] = Y
+
+# Get the unique clusters from our dataset
+list_of_clusters = X['Cluster'].unique()
+```
+
+## Training Per Cluster
+
+After clustering, separate models are trained for each cluster:
+
+```python
+# Parse all the clusters and look for the best ML algorithm for each
+for i in list_of_clusters:
+    # Filter the data for one cluster
+    cluster_data = X[X['Cluster'] == i]
+    
+    # Prepare the feature and label columns
+    cluster_features = cluster_data.drop(['Labels', 'Cluster'], axis=1)
+    cluster_label = cluster_data['Labels']
+    
+    # Split into training and test set for each cluster
+    x_train, x_test, y_train, y_test = train_test_split(
+        cluster_features, cluster_label, test_size=1/3, random_state=355
+    )
+    
+    # Get the best model for this cluster
+    model_finder = tuner.Model_Finder(self.file_object, self.log_writer)
+    best_model_name, best_model = model_finder.get_best_model(
+        x_train, y_train, x_test, y_test
+    )
+    
+    # Save the best model for this cluster
+    file_op = file_methods.File_Operation(self.file_object, self.log_writer)
+    save_model = file_op.save_model(best_model, best_model_name + str(i))
+```
+
+<Note>
+Each cluster gets:
+- Its own train-test split
+- Its own model selection process
+- Its own saved model file (e.g., `XGBoost0`, `SVM1`)
+</Note>
+
+## Clustering Example
+
+Suppose the elbow method determines **3 optimal clusters**:
+
+| Cluster | Characteristics | Model Type | Use Case |
+|---------|-----------------|------------|----------|
+| 0 | High-value claims, severe damage | XGBoost | Detects sophisticated fraud in expensive claims |
+| 1 | Low-value claims, minor damage | SVM | Identifies patterns in small fraudulent claims |
+| 2 | Medium-value claims, mixed severity | XGBoost | General fraud detection |
+
+## Benefits of Cluster-Based Training
+
+<Steps>
+  <Step title="Pattern Specialization">
+    Each model learns fraud patterns specific to its cluster type
+  </Step>
+  
+  <Step title="Improved Accuracy">
+    Models perform better on similar data than on diverse data
+  </Step>
+  
+  <Step title="Reduced False Positives">
+    Specialized models make fewer mistakes on their cluster type
+  </Step>
+  
+  <Step title="Interpretability">
+    Easier to understand why a claim was flagged when you know its cluster
+  </Step>
+</Steps>
+
+## Prediction with Clusters
+
+During prediction:
+
+1. Load the saved K-Means model
+2. Assign new data to existing clusters using `predict()`
+3. Route each prediction to its cluster-specific model
+4. Combine predictions from all clusters
+
+```python
+# Load saved KMeans model
+kmeans_model = file_op.load_model('KMeans')
+
+# Assign clusters to new data
+clusters = kmeans_model.predict(new_data)
+
+# Get predictions from cluster-specific models
+for i in unique_clusters:
+    cluster_data = new_data[clusters == i]
+    model = file_op.load_model(f'{best_model_name}{i}')
+    predictions[i] = model.predict(cluster_data)
+```
+
+## Next Steps
+
+After clustering:
+
+1. Data is divided into optimal clusters
+2. Each cluster is ready for independent model training
+3. The K-Means model is saved for prediction
+
+Proceed to [model training](/training/model-training) to train models for each cluster.

@@ -1,0 +1,542 @@
+---
+title: 'File_Operation'
+description: 'Model persistence and file management module'
+icon: 'floppy-disk'
+---
+
+## Overview
+
+The `File_Operation` class handles model serialization, deserialization, and file management operations. It saves trained models to disk and loads them for prediction, supporting the multi-model architecture where different models are trained for different data clusters.
+
+## Class: File_Operation
+
+**Location:** `source/file_operations/file_methods.py`
+
+**Version:** 1.0
+
+### Constructor
+
+```python
+File_Operation(file_object, logger_object)
+```
+
+<ParamField path="file_object" type="File" required>
+  File object for logging operations
+</ParamField>
+
+<ParamField path="logger_object" type="Logger" required>
+  Logger instance for tracking file operations
+</ParamField>
+
+**Configuration:**
+
+```python
+self.model_directory = 'models/'
+```
+
+---
+
+## Methods
+
+### save_model()
+
+Serializes and saves a trained model to disk using pickle.
+
+```python
+save_model(model, filename)
+```
+
+<ParamField path="model" type="object" required>
+  Trained scikit-learn or XGBoost model object to save
+</ParamField>
+
+<ParamField path="filename" type="str" required>
+  Name for the model file and directory (e.g., 'XGBoost', 'SVM', 'KMeans')
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Returns 'success' on successful save
+</ResponseField>
+
+**Directory Structure:**
+
+Models are saved with the following structure:
+```
+models/
+└── {filename}/
+    └── {filename}.sav
+```
+
+**Example Usage:**
+
+```python
+from file_operations.file_methods import File_Operation
+from sklearn.svm import SVC
+
+# Train a model
+model = SVC(kernel='rbf', C=1.0)
+model.fit(X_train, Y_train)
+
+# Save the model
+file_op = File_Operation(file_object, logger_object)
+result = file_op.save_model(model, 'SVM_Cluster_0')
+
+if result == 'success':
+    print("Model saved successfully")
+```
+
+**Implementation:**
+
+```python
+self.logger_object.log(
+    self.file_object, 
+    'Entered the save_model method of the File_Operation class'
+)
+try:
+    # Create directory path
+    path = os.path.join(self.model_directory, filename)
+    
+    # Remove existing model if present
+    if os.path.isdir(path):
+        shutil.rmtree(self.model_directory)
+        os.makedirs(path)
+    else:
+        os.makedirs(path)
+    
+    # Save model using pickle
+    with open(path + '/' + filename + '.sav', 'wb') as f:
+        pickle.dump(model, f)
+    
+    self.logger_object.log(
+        self.file_object,
+        'Model File ' + filename + ' saved. Exited the save_model method of the Model_Finder class'
+    )
+    
+    return 'success'
+    
+except Exception as e:
+    self.logger_object.log(
+        self.file_object,
+        'Exception occured in save_model method of the Model_Finder class. Exception message: ' + str(e)
+    )
+    self.logger_object.log(
+        self.file_object,
+        'Model File ' + filename + ' could not be saved. Exited the save_model method of the Model_Finder class'
+    )
+    raise Exception()
+```
+
+**Overwrite Behavior:**
+
+<Warning>
+  If a model with the same filename exists, the entire `models/` directory is removed and recreated. This prevents stale models from persisting.
+</Warning>
+
+---
+
+### load_model()
+
+Deserializes and loads a previously saved model from disk.
+
+```python
+load_model(filename)
+```
+
+<ParamField path="filename" type="str" required>
+  Name of the model file to load (without .sav extension)
+</ParamField>
+
+<ResponseField name="return" type="object">
+  Loaded model object ready for predictions
+</ResponseField>
+
+**Example Usage:**
+
+```python
+from file_operations.file_methods import File_Operation
+
+# Load a saved model
+file_op = File_Operation(file_object, logger_object)
+loaded_model = file_op.load_model('SVM_Cluster_0')
+
+# Use for predictions
+predictions = loaded_model.predict(X_new)
+print(f"Predictions: {predictions}")
+```
+
+**Implementation:**
+
+```python
+self.logger_object.log(
+    self.file_object, 
+    'Entered the load_model method of the File_Operation class'
+)
+try:
+    with open(
+        self.model_directory + filename + '/' + filename + '.sav',
+        'rb'
+    ) as f:
+        self.logger_object.log(
+            self.file_object,
+            'Model File ' + filename + ' loaded. Exited the load_model method of the Model_Finder class'
+        )
+        return pickle.load(f)
+        
+except Exception as e:
+    self.logger_object.log(
+        self.file_object,
+        'Exception occured in load_model method of the Model_Finder class. Exception message: ' + str(e)
+    )
+    self.logger_object.log(
+        self.file_object,
+        'Model File ' + filename + ' could not be saved. Exited the load_model method of the Model_Finder class'
+    )
+    raise Exception()
+```
+
+**Expected File Path:**
+
+```
+models/{filename}/{filename}.sav
+```
+
+<Note>
+  The method expects the exact directory structure created by `save_model()`
+</Note>
+
+---
+
+### find_correct_model_file()
+
+Finds the appropriate model file based on cluster number.
+
+```python
+find_correct_model_file(cluster_number)
+```
+
+<ParamField path="cluster_number" type="int" required>
+  Cluster identifier to match against model filenames
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Model filename (without extension) matching the cluster number
+</ResponseField>
+
+**Example Usage:**
+
+```python
+from file_operations.file_methods import File_Operation
+
+# Determine which model to use for cluster 2
+file_op = File_Operation(file_object, logger_object)
+model_name = file_op.find_correct_model_file(cluster_number=2)
+
+print(f"Model for cluster 2: {model_name}")
+# Output: Model for cluster 2: XGBoost2
+
+# Load the identified model
+model = file_op.load_model(model_name)
+```
+
+**Implementation:**
+
+```python
+self.logger_object.log(
+    self.file_object, 
+    'Entered the find_correct_model_file method of the File_Operation class'
+)
+try:
+    self.cluster_number = cluster_number
+    self.folder_name = self.model_directory
+    self.list_of_model_files = []
+    self.list_of_files = os.listdir(self.folder_name)
+    
+    for self.file in self.list_of_files:
+        try:
+            if (self.file.index(str(self.cluster_number)) != -1):
+                self.model_name = self.file
+        except:
+            continue
+    
+    self.model_name = self.model_name.split('.')[0]
+    self.logger_object.log(
+        self.file_object,
+        'Exited the find_correct_model_file method of the Model_Finder class.'
+    )
+    return self.model_name
+    
+except Exception as e:
+    self.logger_object.log(
+        self.file_object,
+        'Exception occured in find_correct_model_file method of the Model_Finder class. Exception message: ' + str(e)
+    )
+    self.logger_object.log(
+        self.file_object,
+        'Exited the find_correct_model_file method of the Model_Finder class with Failure'
+    )
+    raise Exception()
+```
+
+**Naming Convention:**
+
+Model files should include the cluster number in their name:
+- `XGBoost0` - XGBoost model for cluster 0
+- `SVM1` - SVM model for cluster 1
+- `XGBoost2` - XGBoost model for cluster 2
+
+<Tip>
+  Use descriptive filenames like `ModelName{ClusterNumber}` for easy identification
+</Tip>
+
+---
+
+## Complete Model Persistence Workflow
+
+### Training and Saving Models
+
+```python
+from file_operations.file_methods import File_Operation
+from best_model_finder.tuner import Model_Finder
+from data_preprocessing.clustering import KMeansClustering
+
+# Initialize objects
+file_op = File_Operation(file_object, logger_object)
+model_finder = Model_Finder(file_object, logger_object)
+kmeans = KMeansClustering(file_object, logger_object)
+
+# Create clusters
+optimal_clusters = kmeans.elbow_plot(X_train)
+data_with_clusters = kmeans.create_clusters(X_train, optimal_clusters)
+
+# Train and save model for each cluster
+for cluster_num in data_with_clusters['Cluster'].unique():
+    # Get cluster data
+    cluster_data = data_with_clusters[
+        data_with_clusters['Cluster'] == cluster_num
+    ]
+    cluster_features = cluster_data.drop(['Cluster'], axis=1)
+    cluster_labels = Y_train[cluster_data.index]
+    
+    # Find best model for this cluster
+    model_name, model = model_finder.get_best_model(
+        cluster_features, cluster_labels,
+        X_test, Y_test
+    )
+    
+    # Save the model
+    filename = f"{model_name}{cluster_num}"
+    file_op.save_model(model, filename)
+    
+    print(f"Saved {filename} for cluster {cluster_num}")
+```
+
+### Loading Models for Prediction
+
+```python
+from file_operations.file_methods import File_Operation
+from data_preprocessing.clustering import KMeansClustering
+
+# Initialize objects
+file_op = File_Operation(file_object, logger_object)
+
+# Load KMeans model to assign clusters
+kmeans_model = file_op.load_model('KMeans')
+
+# Predict clusters for new data
+clusters = kmeans_model.predict(X_new)
+
+# Make predictions for each cluster
+predictions = []
+
+for i, cluster_num in enumerate(clusters):
+    # Find the right model for this cluster
+    model_name = file_op.find_correct_model_file(cluster_num)
+    
+    # Load the model
+    model = file_op.load_model(model_name)
+    
+    # Make prediction
+    pred = model.predict([X_new[i]])
+    predictions.append(pred[0])
+
+print(f"Predictions: {predictions}")
+```
+
+---
+
+## Model Storage Structure
+
+Typical directory structure after training:
+
+```
+models/
+├── KMeans/
+│   └── KMeans.sav          # Clustering model
+├── XGBoost0/
+│   └── XGBoost0.sav        # XGBoost for cluster 0
+├── SVM1/
+│   └── SVM1.sav            # SVM for cluster 1
+└── XGBoost2/
+    └── XGBoost2.sav        # XGBoost for cluster 2
+```
+
+---
+
+## Pickle Serialization
+
+### Supported Model Types
+
+The pickle-based approach supports:
+
+- scikit-learn models (SVC, RandomForest, etc.)
+- XGBoost models (XGBClassifier, XGBRegressor)
+- KMeans clustering models
+- Custom preprocessing pipelines
+
+### Pickle Security
+
+<Warning>
+  Pickle files can execute arbitrary code during deserialization. Only load models from trusted sources.
+</Warning>
+
+### Version Compatibility
+
+<Note>
+  Models should be loaded with the same library versions used during training to avoid compatibility issues.
+</Note>
+
+**Best Practice:**
+
+Document library versions when saving models:
+
+```python
+import sklearn
+import xgboost
+import pickle
+
+model_metadata = {
+    'sklearn_version': sklearn.__version__,
+    'xgboost_version': xgboost.__version__,
+    'model': trained_model
+}
+
+with open('model_with_metadata.pkl', 'wb') as f:
+    pickle.dump(model_metadata, f)
+```
+
+---
+
+## Error Handling
+
+Common errors and their causes:
+
+### FileNotFoundError
+
+```python
+# Raised when model file doesn't exist
+Exception: Model File [filename] could not be saved
+```
+
+**Solution:** Verify the model was saved and the filename is correct
+
+### PermissionError
+
+```python
+# Raised when lacking write/read permissions
+Exception: Model File [filename] could not be saved
+```
+
+**Solution:** Check directory permissions
+
+### Pickle Errors
+
+```python
+# Raised for version incompatibility or corrupted files
+Exception: Model File [filename] could not be saved
+```
+
+**Solution:** Ensure library versions match training environment
+
+---
+
+## Dependencies
+
+```python
+import pickle
+import os
+import shutil
+```
+
+---
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Naming Convention" icon="tag">
+    Use descriptive names: `{ModelType}{ClusterNumber}`
+    Example: `XGBoost0`, `SVM1`
+  </Card>
+  
+  <Card title="Backup Models" icon="copy">
+    Keep backups before overwriting models in production
+  </Card>
+  
+  <Card title="Version Control" icon="code-branch">
+    Track model versions and training data versions together
+  </Card>
+  
+  <Card title="Metadata" icon="circle-info">
+    Save training metadata (date, accuracy, parameters) alongside models
+  </Card>
+</CardGroup>
+
+---
+
+## Advanced Usage
+
+### Model Versioning
+
+```python
+from datetime import datetime
+import json
+
+# Save model with version metadata
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+model_name = f"XGBoost0_v{timestamp}"
+
+file_op.save_model(model, model_name)
+
+# Save metadata
+metadata = {
+    'model_name': model_name,
+    'timestamp': timestamp,
+    'accuracy': 0.95,
+    'auc_score': 0.92,
+    'hyperparameters': {
+        'n_estimators': 100,
+        'max_depth': 9
+    }
+}
+
+with open(f'models/{model_name}/metadata.json', 'w') as f:
+    json.dump(metadata, f, indent=2)
+```
+
+### Batch Model Loading
+
+```python
+# Load all models for a multi-cluster setup
+def load_all_cluster_models(num_clusters):
+    file_op = File_Operation(file_object, logger_object)
+    models = {}
+    
+    for cluster_num in range(num_clusters):
+        model_name = file_op.find_correct_model_file(cluster_num)
+        models[cluster_num] = file_op.load_model(model_name)
+    
+    return models
+
+# Usage
+cluster_models = load_all_cluster_models(3)
+prediction = cluster_models[0].predict(X_new)
+```
