@@ -1,0 +1,109 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Fraud Detection System",
+  "projectDescription": "End-to-end machine learning system for detecting fraudulent insurance claims using Flask, XGBoost, and K-Means clustering",
+  "theme": "palm",
+  "primaryColor": "#E74C3C",
+  "lightColor": "#EC7063",
+  "darkColor": "#C0392B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/overview",
+              "concepts/architecture",
+              "concepts/data-pipeline",
+              "concepts/fraud-detection"
+            ]
+          },
+          {
+            "group": "Training",
+            "pages": [
+              "training/data-preparation",
+              "training/data-validation",
+              "training/preprocessing",
+              "training/clustering",
+              "training/model-training",
+              "training/model-selection"
+            ]
+          },
+          {
+            "group": "Prediction",
+            "pages": [
+              "prediction/overview",
+              "prediction/batch-prediction",
+              "prediction/data-validation",
+              "prediction/output"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Flask Endpoints",
+            "pages": [
+              "api/endpoints",
+              "api/train",
+              "api/predict"
+            ]
+          },
+          {
+            "group": "Modules",
+            "pages": [
+              "api/modules/preprocessing",
+              "api/modules/clustering",
+              "api/modules/model-finder",
+              "api/modules/data-loader",
+              "api/modules/file-operations"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Production",
+            "pages": [
+              "deployment/setup",
+              "deployment/monitoring",
+              "deployment/heroku"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-model fraud detection with XGBoost and SVM",
+    "K-Means clustering for data segmentation",
+    "Automated data validation and preprocessing",
+    "Flask API for training and predictions",
+    "Batch prediction processing",
+    "Flask monitoring dashboard integration"
+  ],
+  "publicApiSurface": [
+    "POST /train - Train models on insurance claims data",
+    "POST /predict - Predict fraud on new claims",
+    "GET /dashboard - Access monitoring dashboard",
+    "trainModel.trainingModel() - Execute model training pipeline",
+    "prediction.predictionFromModel() - Generate fraud predictions",
+    "Preprocessor.encode_categorical_columns() - Encode categorical features",
+    "KMeansClustering.create_clusters() - Create data clusters",
+    "Model_Finder.get_best_model() - Select best performing model"
+  ]
+}
